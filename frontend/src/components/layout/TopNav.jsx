@@ -6,7 +6,7 @@ export function TopNav({ activeTab, onSelectTab }) {
     { id: "download", label: "Robots de Descarga", icon: Download, tag: "D_..." },
     { id: "conversion", label: "Robots de Conversión", icon: RefreshCw, tag: "C_..." },
     { id: "migration", label: "Robots de Migración", icon: Truck, tag: "M_..." },
-    { id: "autogenerate", label: "AutoGenerate (IA)", icon: Sparkles, tag: "Taiga" },
+    { id: "autogenerate", label: "AutoGenerate (IA)", icon: Sparkles, tag: "Taiga (Beta)" },
     { id: "metrics", label: "Métricas", icon: BarChart3, tag: "Auditoría" },
   ];
 

@@ -88,13 +88,13 @@ def refactor_conversion_code(raw_code: str, report_code: str) -> str:
     code_content = re.sub(r"sys\.path\.append\([^)]*\)\s*", "", code_content)
 
     # 2. Corregir imports de herramientas hacia los paths oficiales de la Plataforma V2
-    code_content = re.sub(r"\bfrom\s+(?:models\.)?(?:conversion\.)?tools\.conversion_tools\b", "from models.conversion.tools.conversion_tools", code_content)
-    code_content = re.sub(r"\bfrom\s+conversion_tools\b", "from models.conversion.tools.conversion_tools", code_content)
-    code_content = re.sub(r"\bimport\s+conversion_tools\b", "import models.conversion.tools.conversion_tools as conversion_tools", code_content)
+    code_content = re.sub(r"\bfrom\s+(?:models\.)?(?:conversion\.)?(?:tools|core)\.conversion_tools\b", "from models.conversion.tools.conversion_tools", code_content)
+    code_content = re.sub(r"\bfrom\s+(?:core\.)?conversion_tools\b", "from models.conversion.tools.conversion_tools", code_content)
+    code_content = re.sub(r"\bimport\s+(?:core\.)?conversion_tools\b", "import models.conversion.tools.conversion_tools as conversion_tools", code_content)
 
-    code_content = re.sub(r"\bfrom\s+(?:models\.)?(?:download\.)?tools\.download_tools\b", "from models.download.tools.download_tools", code_content)
-    code_content = re.sub(r"\bfrom\s+download_tools\b", "from models.download.tools.download_tools", code_content)
-    code_content = re.sub(r"\bimport\s+download_tools\b", "import models.download.tools.download_tools as download_tools", code_content)
+    code_content = re.sub(r"\bfrom\s+(?:models\.)?(?:download\.)?(?:tools|core)\.download_tools\b", "from models.download.tools.download_tools", code_content)
+    code_content = re.sub(r"\bfrom\s+(?:core\.)?download_tools\b", "from models.download.tools.download_tools", code_content)
+    code_content = re.sub(r"\bimport\s+(?:core\.)?download_tools\b", "import models.download.tools.download_tools as download_tools", code_content)
 
     # 3. Separar header (antes de la clase principal) del cuerpo
     class_match = re.search(r"^[ \t]*class\s+[A-Za-z0-9_]+", code_content, flags=re.MULTILINE)

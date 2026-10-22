@@ -1,5 +1,31 @@
 import React, { useState, useEffect } from "react";
-import { Truck, Play, Code, Database, Save, CheckCircle, CheckCircle2, Zap, Bot, Sparkles, RefreshCw, AlertTriangle, ArrowRight, Server, Copy, Table } from "lucide-react";
+import {
+  Truck,
+  Play,
+  Code,
+  Database,
+  Save,
+  CheckCircle,
+  CheckCircle2,
+  Zap,
+  Bot,
+  Sparkles,
+  RefreshCw,
+  AlertTriangle,
+  ArrowRight,
+  Server,
+  Copy,
+  Table,
+  Brain,
+  Lightbulb,
+  FileText,
+  BarChart3,
+  Star,
+  Target,
+  Shuffle,
+  Edit2,
+  Settings,
+} from "lucide-react";
 import Editor from "@monaco-editor/react";
 import { api } from "../services/api";
 import { Badge } from "../components/ui/Badge";
@@ -364,19 +390,21 @@ export function MigrationView({ externalLogs = [] }) {
         <div className="inline-flex p-1 bg-[#f7f7f7] rounded-[4px] border border-[#e8e8e8]">
           <button
             onClick={() => setMigFlowMode("conversion_sqlite")}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-[3px] transition-all ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-[3px] transition-all flex items-center gap-1.5 ${
               migFlowMode === "conversion_sqlite" ? "bg-[#1a1a1a] text-white shadow-xs" : "text-[#636363] hover:text-[#1a1a1a]"
             }`}
           >
-            🔄 Generar desde SQLite de Conversión
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Generar desde SQLite de Conversión</span>
           </button>
           <button
             onClick={() => setMigFlowMode("existing_v2")}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-[3px] transition-all ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-[3px] transition-all flex items-center gap-1.5 ${
               migFlowMode === "existing_v2" ? "bg-[#1a1a1a] text-white shadow-xs" : "text-[#636363] hover:text-[#1a1a1a]"
             }`}
           >
-            ✨ Robots Existentes en V2
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Robots Existentes en V2</span>
           </button>
         </div>
       </div>
@@ -401,7 +429,7 @@ export function MigrationView({ externalLogs = [] }) {
           >
             {outputs.map((o) => (
               <option key={o.parent_code} value={o.parent_code}>
-                {o.parent_code} ➔ {o.migration_parent} ({o.reports?.length || 0} reportes)
+                {o.parent_code} → {o.migration_parent} ({o.reports?.length || 0} reportes)
               </option>
             ))}
           </select>
@@ -424,7 +452,7 @@ export function MigrationView({ externalLogs = [] }) {
           >
             {activeReports.map((r) => (
               <option key={r.code} value={r.code}>
-                {r.code} {r.has_conversion_py ? "✓" : ""}
+                {r.code} {r.has_conversion_py ? " [Migrado]" : ""}
               </option>
             ))}
           </select>
@@ -435,7 +463,10 @@ export function MigrationView({ externalLogs = [] }) {
       {dbMigInfo && (
         <div className="bg-[#f7f7f7] border border-[#e8e8e8] rounded-[8px] p-3 text-xs flex flex-wrap items-center justify-between gap-3">
           <div>
-            <span className="font-bold text-[#1a1a1a]">📊 Metadatos en BD: </span>
+            <span className="font-bold text-[#1a1a1a] inline-flex items-center gap-1">
+              <BarChart3 className="w-3.5 h-3.5 text-[#024ad8]" />
+              <span>Metadatos en BD:</span>
+            </span>{" "}
             <span className="text-[#3d3d3d]">{dbMigInfo.name || "Sin nombre"}</span>
             <span className="mx-2">•</span>
             <span className="text-[#636363]">Storage Table: <code>{dbMigInfo.storage_table || "-"}</code></span>
@@ -458,7 +489,7 @@ export function MigrationView({ externalLogs = [] }) {
               : "text-[#636363] hover:text-[#1a1a1a]"
           }`}
         >
-          <Bot className="w-4 h-4" /> ⚙️ 1. Configuración & Agente IA
+          <Bot className="w-4 h-4" /> <span>1. Configuración & Agente IA</span>
         </button>
 
         <button
@@ -472,7 +503,7 @@ export function MigrationView({ externalLogs = [] }) {
               : "text-[#636363] hover:text-[#1a1a1a]"
           }`}
         >
-          <Code className="w-4 h-4" /> 📄 2. Previsualizar Código (.sql & .py)
+          <Code className="w-4 h-4" /> <span>2. Previsualizar Código (.sql & .py)</span>
         </button>
 
         <button
@@ -483,7 +514,7 @@ export function MigrationView({ externalLogs = [] }) {
               : "text-[#636363] hover:text-[#1a1a1a]"
           }`}
         >
-          <Server className="w-4 h-4" /> 🚀 3. Guardar & Desplegar al Servidor
+          <Server className="w-4 h-4" /> <span>3. Guardar & Desplegar al Servidor</span>
         </button>
       </div>
 
@@ -498,7 +529,7 @@ export function MigrationView({ externalLogs = [] }) {
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#024ad8]" />
                 <h3 className="font-bold text-sm text-[#1a1a1a]">
-                  🤖 Agente Analizador Inteligente de SQLite (Gemini / Heurístico)
+                  Agente Analizador Inteligente de SQLite (Gemini / Heurístico)
                 </h3>
               </div>
               <button
@@ -507,7 +538,7 @@ export function MigrationView({ externalLogs = [] }) {
                 className="hp-btn hp-btn-primary text-xs"
               >
                 <Bot className="w-3.5 h-3.5" />
-                <span>{analyzingAgent ? "Analizando SQLite..." : "🧠 Ejecutar Análisis con Agente IA"}</span>
+                <span>{analyzingAgent ? "Analizando SQLite..." : "Ejecutar Análisis con Agente IA"}</span>
               </button>
             </div>
 
@@ -518,15 +549,19 @@ export function MigrationView({ externalLogs = [] }) {
             {agentResult && (
               <div className="bg-[#c9e0fc]/20 border border-[#024ad8]/30 rounded-[8px] p-4 text-xs space-y-2">
                 <div className="flex items-center justify-between font-bold text-[#0e3191]">
-                  <span>💡 Diagnóstico del Agente IA ({agentResult.source || "Motor Heurístico"}):</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Lightbulb className="w-4 h-4 text-amber-500" />
+                    <span>Diagnóstico del Agente IA ({agentResult.source || "Motor Heurístico"}):</span>
+                  </span>
                   <Badge variant="primary">Métrica: {agentResult.base_metric} | Unidad: {agentResult.base_unit} | Factor: {agentResult.conversion_factor}</Badge>
                 </div>
                 <div className="text-[#3d3d3d] whitespace-pre-line leading-relaxed">
                   {agentResult.explanation}
                 </div>
                 {agentResult.agent_warning && (
-                  <div className="p-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-[4px] mt-2">
-                    ⚠️ {agentResult.agent_warning}
+                  <div className="p-2 bg-amber-50 border border-amber-200 text-amber-900 rounded-[4px] mt-2 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>{agentResult.agent_warning}</span>
                   </div>
                 )}
               </div>
@@ -570,7 +605,7 @@ export function MigrationView({ externalLogs = [] }) {
                 </div>
 
                 <div>
-                  <label className="text-xs text-[#636363] block mb-1">✍️ O escribir otra unidad personalizada (opcional):</label>
+                  <label className="text-xs text-[#636363] block mb-1">O escribir otra unidad personalizada (opcional):</label>
                   <input
                     type="text"
                     value={customUnit}
@@ -605,8 +640,9 @@ export function MigrationView({ externalLogs = [] }) {
                       className="accent-[#024ad8] w-4 h-4 mt-0.5"
                     />
                     <div>
-                      <span className="text-xs font-bold text-[#1a1a1a] block">
-                        🔀 Mapeo dinámico de Múltiples Hechos (Conteo, Porcentaje %, Monedas BOB/USD/UFV, etc.)
+                      <span className="text-xs font-bold text-[#1a1a1a] flex items-center gap-1.5">
+                        <Shuffle className="w-3.5 h-3.5 text-[#024ad8]" />
+                        <span>Mapeo dinámico de Múltiples Hechos (Conteo, Porcentaje %, Monedas BOB/USD/UFV, etc.)</span>
                       </span>
                       <span className="text-[11px] text-[#636363] block mt-0.5">
                         Detecta fila por fila si el valor corresponde a Porcentaje %, Moneda, Tipo de Cambio o Factores mixtos y clasifica dinámicamente cada registro.
@@ -620,7 +656,10 @@ export function MigrationView({ externalLogs = [] }) {
             {/* Columns breakdown */}
             {structInfo && (
               <div className="pt-4 border-t border-[#e8e8e8] space-y-2 text-xs">
-                <div className="font-bold text-[#1a1a1a]">📋 Columnas detectadas en SQLite para PostgreSQL:</div>
+                <div className="font-bold text-[#1a1a1a] flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-[#024ad8]" />
+                  <span>Columnas detectadas en SQLite para PostgreSQL:</span>
+                </div>
                 <div className="grid grid-cols-2 gap-4 text-[#3d3d3d]">
                   <div>• <strong>Títulos:</strong> <code>{JSON.stringify(structInfo.title_cols || [])}</code></div>
                   <div>• <strong>Jerarquías:</strong> <code>{JSON.stringify(structInfo.nv_cols || [])}</code></div>
@@ -716,7 +755,7 @@ export function MigrationView({ externalLogs = [] }) {
                                   : "text-[#3d3d3d]"
                               }`}
                             >
-                              {isMetric ? "⭐ metrica_preview" : isUnit ? "⭐ unidad_preview" : col}
+                              {isMetric ? "metrica_preview" : isUnit ? "unidad_preview" : col}
                             </th>
                           );
                         })}
@@ -1046,7 +1085,10 @@ export function MigrationView({ externalLogs = [] }) {
             {latestConvInfo && (
               <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-[6px] text-xs text-blue-900 space-y-1">
                 <div className="flex items-center gap-2 font-bold">
-                  <span>🎯 Última Conversión detectada en BD:</span>
+                  <span className="inline-flex items-center gap-1 text-blue-900">
+                    <Target className="w-3.5 h-3.5 text-blue-700" />
+                    <span>Última Conversión detectada en BD:</span>
+                  </span>
                   <Badge variant="primary">ID #{latestConvInfo.id_conversion}</Badge>
                   {latestConvInfo.converted_to && (
                     <span className="text-blue-700">Corte: <strong>{latestConvInfo.converted_to}</strong></span>
@@ -1115,7 +1157,7 @@ export function MigrationView({ externalLogs = [] }) {
                 <span>
                   {triggeringMigDag
                     ? "Disparando DAG en Airflow..."
-                    : `⚡ Disparar DAG ${selectedParent.replace("C_", "M_")} en Airflow`}
+                    : `Disparar DAG ${selectedParent.replace("C_", "M_")} en Airflow`}
                 </span>
               </button>
             </div>

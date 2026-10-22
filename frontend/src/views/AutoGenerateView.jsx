@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Copy,
   RefreshCw,
+  Check,
 } from "lucide-react";
 import Editor from "@monaco-editor/react";
 import { api } from "../services/api";
@@ -231,7 +232,7 @@ export function AutoGenerateView({ externalLogs = [] }) {
           <div className="flex items-center gap-2">
             <span className="hp-chevron" />
             <h1 className="text-2xl font-bold tracking-tight text-[#1a1a1a]">
-              AutoGenerate: Agente Autónomo IA (Taiga)
+              AutoGenerate: Agente Autónomo IA (Taiga) (BETA)
             </h1>
           </div>
           <p className="text-xs text-[#636363] mt-1">
@@ -544,23 +545,27 @@ export function AutoGenerateView({ externalLogs = [] }) {
         <div className="hp-card p-6 space-y-6">
           <div className="flex items-center gap-3 border-b border-[#e8e8e8] pb-3 text-xs">
             {[
-              { id: "conversion", label: "📘 Guía Conversión (2 Métodos)" },
-              { id: "download", label: "📥 Guía Descarga (4 Tipos)" },
-              { id: "checklist", label: "✅ Checklist de Calidad" },
-              { id: "templates", label: "⚡ Plantillas Canónicas" },
-            ].map((g) => (
-              <button
-                key={g.id}
-                onClick={() => setGuideCategory(g.id)}
-                className={`pb-1 font-bold uppercase tracking-wider transition-colors ${
-                  guideCategory === g.id
-                    ? "text-[#024ad8] border-b-2 border-[#024ad8]"
-                    : "text-[#636363] hover:text-[#1a1a1a]"
-                }`}
-              >
-                {g.label}
-              </button>
-            ))}
+              { id: "conversion", label: "Guía Conversión (2 Métodos)", icon: BookOpen },
+              { id: "download", label: "Guía Descarga (4 Tipos)", icon: Download },
+              { id: "checklist", label: "Checklist de Calidad", icon: CheckSquare },
+              { id: "templates", label: "Plantillas Canónicas", icon: Code2 },
+            ].map((g) => {
+              const IconComp = g.icon;
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => setGuideCategory(g.id)}
+                  className={`pb-1 font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 ${
+                    guideCategory === g.id
+                      ? "text-[#024ad8] border-b-2 border-[#024ad8]"
+                      : "text-[#636363] hover:text-[#1a1a1a]"
+                  }`}
+                >
+                  <IconComp className="w-3.5 h-3.5" />
+                  <span>{g.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div className="prose prose-sm max-w-none text-xs text-[#3d3d3d] space-y-4 leading-relaxed">
@@ -591,11 +596,14 @@ export function AutoGenerateView({ externalLogs = [] }) {
                     </code>
                   </li>
                 </ol>
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-900 rounded-[4px]">
-                  ❌ <strong>PROHIBIDO:</strong> No definir constructor{" "}
-                  <code>__init__</code>, no definir métodos auxiliares en{" "}
-                  <code>self</code> (ej. <code>self._limpiar()</code>), y no
-                  hardcodear listas extensas de nombres de cuentas.
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-900 rounded-[4px] flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>PROHIBIDO:</strong> No definir constructor{" "}
+                    <code>__init__</code>, no definir métodos auxiliares en{" "}
+                    <code>self</code> (ej. <code>self._limpiar()</code>), y no
+                    hardcodear listas extensas de nombres de cuentas.
+                  </div>
                 </div>
               </div>
             )}
@@ -636,13 +644,20 @@ export function AutoGenerateView({ externalLogs = [] }) {
                 <h4 className="font-bold text-sm text-[#1a1a1a]">
                   Checklist Obligatorio para Pull Requests
                 </h4>
-                <ul className="space-y-1.5 text-xs">
-                  <li>✔ PEP 8 estricto (4 espacios, comentarios y nombres en inglés).</li>
-                  <li>✔ Sin listas de strings quemadas o hardcodeadas.</li>
-                  <li>✔ Uso de celdas pivote y sangrías (indent_level).</li>
-                  <li>✔ Retorno de validate_data_results(): False si es válido, True si hay error.</li>
-                  <li>✔ Limpieza y recreación rigurosa de carpetas temporales tmp/.</li>
-                  <li>✔ Suite de tests unitarios finalizando en OK.</li>
+                <ul className="space-y-2 text-xs">
+                  {[
+                    "PEP 8 estricto (4 espacios, comentarios y nombres en inglés).",
+                    "Sin listas de strings quemadas o hardcodeadas.",
+                    "Uso de celdas pivote y sangrías (indent_level).",
+                    "Retorno de validate_data_results(): False si es válido, True si hay error.",
+                    "Limpieza y recreación rigurosa de carpetas temporales tmp/.",
+                    "Suite de tests unitarios finalizando en OK.",
+                  ].map((item, idx) => (
+                    <li key={idx} className="flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}

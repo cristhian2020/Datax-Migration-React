@@ -13,6 +13,7 @@ import {
   ArrowUpRight,
   Layers,
   Sparkles,
+  Clock,
 } from "lucide-react";
 import { api } from "../services/api";
 import { Badge } from "../components/ui/Badge";
@@ -185,8 +186,15 @@ export function MetricsView() {
             <ShieldCheck className="w-4 h-4 text-[#024ad8]" />
             <span>Regla de Negocio: Aislamiento Estricto de Crons Automáticos</span>
           </div>
-          <Badge variant={onlyFullPipeline ? "success" : "warning"}>
-            {onlyFullPipeline ? "✓ Modo: Solo 100% Completados" : "Modo: Todos / En Progreso"}
+          <Badge variant={onlyFullPipeline ? "success" : "warning"} className="inline-flex items-center gap-1">
+            {onlyFullPipeline ? (
+              <>
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Modo: Solo 100% Completados</span>
+              </>
+            ) : (
+              <span>Modo: Todos / En Progreso</span>
+            )}
           </Badge>
         </div>
         <p className="text-[#636363] leading-relaxed">
@@ -429,9 +437,15 @@ export function MetricsView() {
                     </td>
                     <td className="py-2.5 px-4 text-center">
                       {r.is_full_pipeline ? (
-                        <Badge variant="success">✓ 100% COMPLETO</Badge>
+                        <Badge variant="success" className="inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>100% COMPLETO</span>
+                        </Badge>
                       ) : (
-                        <Badge variant="warning">⏳ EN DESARROLLO</Badge>
+                        <Badge variant="warning" className="inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          <span>EN DESARROLLO</span>
+                        </Badge>
                       )}
                     </td>
                   </tr>

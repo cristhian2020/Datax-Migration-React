@@ -19,11 +19,18 @@ import {
   FileText,
   ExternalLink,
   Search,
+  Loader2,
+  Package,
+  Zap,
+  Clock,
+  Folder,
+  Edit3,
 } from "lucide-react";
 import Editor from "@monaco-editor/react";
 import { api } from "../services/api";
 import { Badge } from "../components/ui/Badge";
 import { TerminalLogs } from "../components/ui/TerminalLogs";
+import { Toast } from "../components/ui/Toast";
 
 export function DownloadView({ externalLogs = [] }) {
   const [flowMode, setFlowMode] = useState("v2"); // Default to V2 as requested, options: "v1", "v2"
@@ -52,6 +59,7 @@ export function DownloadView({ externalLogs = [] }) {
   const [selectedPrFile, setSelectedPrFile] = useState("");
   const [loadingPrs, setLoadingPrs] = useState(false);
   const [downloadingPrFile, setDownloadingPrFile] = useState(false);
+  const [toast, setToast] = useState(null);
 
   // Options
   const [skipTest, setSkipTest] = useState(false);
@@ -187,11 +195,22 @@ export function DownloadView({ externalLogs = [] }) {
         ...prev,
         `[GitHub] Código cargado exitosamente en el editor Monaco.`,
       ]);
+      setToast({
+        type: "success",
+        title: "Código Cargado al Editor",
+        message: `El archivo '${selectedPrFile}' fue descargado y cargado en el editor Monaco.`,
+      });
     } catch (e) {
+      const errMsg = e.response?.data?.detail || e.message;
       setLocalLogs((prev) => [
         ...prev,
-        `[GitHub Error] ${e.response?.data?.detail || e.message}`,
+        `[GitHub Error] ${errMsg}`,
       ]);
+      setToast({
+        type: "error",
+        title: "Error al Cargar Archivo",
+        message: errMsg || "Error descargando archivo de GitHub.",
+      });
     } finally {
       setDownloadingPrFile(false);
     }
@@ -406,26 +425,28 @@ export function DownloadView({ externalLogs = [] }) {
               setFlowMode("v1");
               setActiveSubTab("code");
             }}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-[3px] transition-all ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-[3px] transition-all flex items-center gap-1.5 ${
               flowMode === "v1"
                 ? "bg-[#1a1a1a] text-white shadow-xs"
                 : "text-[#636363] hover:text-[#1a1a1a]"
             }`}
           >
-            📦 Migrar desde V1 (Legado)
+            <Package className="w-3.5 h-3.5" />
+            <span>Migrar desde V1 (Legado)</span>
           </button>
           <button
             onClick={() => {
               setFlowMode("v2");
               setActiveSubTab("code");
             }}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-[3px] transition-all ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-[3px] transition-all flex items-center gap-1.5 ${
               flowMode === "v2"
                 ? "bg-[#1a1a1a] text-white shadow-xs"
                 : "text-[#636363] hover:text-[#1a1a1a]"
             }`}
           >
-            ⚡ Código V2 Existente / Nuevo
+            <Zap className="w-3.5 h-3.5" />
+            <span>Código V2 Existente / Nuevo</span>
           </button>
         </div>
       </div>
@@ -445,7 +466,7 @@ export function DownloadView({ externalLogs = [] }) {
               >
                 {robots.map((r) => (
                   <option key={r.code} value={r.code}>
-                    {r.code} {r.already_migrated ? "✓" : ""}
+                    {r.code} {r.already_migrated ? " [Migrado]" : ""}
                   </option>
                 ))}
               </select>
@@ -519,9 +540,13 @@ export function DownloadView({ externalLogs = [] }) {
           </span>
           <div className="mt-1 flex items-center gap-2">
             {detail?.already_migrated ? (
-              <Badge variant="success">✓ MIGRADO</Badge>
+              <Badge variant="success" className="inline-flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> MIGRADO
+              </Badge>
             ) : (
-              <Badge variant="warning">⏳ PENDIENTE</Badge>
+              <Badge variant="warning" className="inline-flex items-center gap-1">
+                <Clock className="w-3 h-3" /> PENDIENTE
+              </Badge>
             )}
             {detail?.has_dag && <Badge variant="primary">DAG ACTIVO</Badge>}
           </div>
@@ -680,23 +705,27 @@ export function DownloadView({ externalLogs = [] }) {
 
                   <div className="flex flex-wrap items-center gap-1.5 text-xs">
                     {[
-                      { id: "local", label: "📁 Archivo Local V2" },
-                      { id: "github", label: "🐙 GitHub Pull Request" },
-                      { id: "upload", label: "📄 Subir Archivo .py" },
-                      { id: "manual", label: "✏️ Editor Libre" },
-                    ].map((src) => (
-                      <button
-                        key={src.id}
-                        onClick={() => setCodeSource(src.id)}
-                        className={`px-3 py-1 rounded-[4px] font-semibold transition-all ${
-                          codeSource === src.id
-                            ? "bg-[#024ad8] text-white shadow-xs"
-                            : "bg-slate-100 text-[#636363] hover:bg-slate-200"
-                        }`}
-                      >
-                        {src.label}
-                      </button>
-                    ))}
+                      { id: "local", label: "Archivo Local V2", icon: Folder },
+                      { id: "github", label: "GitHub Pull Request", icon: GitPullRequest },
+                      { id: "upload", label: "Subir Archivo .py", icon: Upload },
+                      { id: "manual", label: "Editor Libre", icon: Edit3 },
+                    ].map((src) => {
+                      const IconComp = src.icon;
+                      return (
+                        <button
+                          key={src.id}
+                          onClick={() => setCodeSource(src.id)}
+                          className={`px-3 py-1 rounded-[4px] font-semibold transition-all flex items-center gap-1.5 ${
+                            codeSource === src.id
+                              ? "bg-[#024ad8] text-white shadow-xs"
+                              : "bg-slate-100 text-[#636363] hover:bg-slate-200"
+                          }`}
+                        >
+                          <IconComp className="w-3.5 h-3.5" />
+                          <span>{src.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -769,9 +798,10 @@ export function DownloadView({ externalLogs = [] }) {
                             <button
                               onClick={handleDownloadPrFile}
                               disabled={downloadingPrFile || !selectedPrFile}
-                              className="px-3 py-1.5 text-xs bg-[#1a1a1a] text-white font-semibold rounded-[4px] hover:bg-black whitespace-nowrap"
+                              className="px-3 py-1.5 text-xs bg-[#1a1a1a] text-white font-semibold rounded-[4px] hover:bg-black whitespace-nowrap flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              {downloadingPrFile ? "Cargando..." : "Cargar al Editor"}
+                              {downloadingPrFile && <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />}
+                              <span>{downloadingPrFile ? "Cargando al editor..." : "Cargar al Editor"}</span>
                             </button>
                           </div>
                         </div>
@@ -993,7 +1023,9 @@ export function DownloadView({ externalLogs = [] }) {
               </p>
             </div>
             {deploySuccess && (
-              <Badge variant="success">✓ DESPLEGADO EXITOSAMENTE</Badge>
+              <Badge variant="success" className="inline-flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> DESPLEGADO EXITOSAMENTE
+              </Badge>
             )}
           </div>
 
@@ -1090,6 +1122,9 @@ export function DownloadView({ externalLogs = [] }) {
 
       {/* Terminal Logs Console */}
       <TerminalLogs logs={[...externalLogs, ...localLogs]} title="Download Process Output" />
+
+      {/* Modern Toast Notification */}
+      <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );
 }

@@ -51,6 +51,11 @@ class DownloadGithubFileRequest(BaseModel):
     filename: str
     is_sample: bool = False
     parent_code: Optional[str] = ""
+    report_code: Optional[str] = ""
+
+class RefactorCodeRequest(BaseModel):
+    code: str
+    report_code: str
 
 class RunConversionTestRequest(BaseModel):
     code: str
@@ -285,7 +290,33 @@ async def download_file_from_github(req: DownloadGithubFileRequest):
         return {"success": True, "type": "sample", "path": out_path, "filename": fname}
     else:
         text_content = content_bytes.decode("utf-8", errors="ignore")
-        return {"success": True, "type": "code", "content": text_content, "filename": req.filename}
+        rep_code = req.report_code or os.path.splitext(os.path.basename(req.filename))[0]
+        was_refactored = False
+        refactored_content = text_content
+        if req.filename.lower().endswith(".py"):
+            try:
+                refactored_content = refactor_conversion_code(text_content, rep_code)
+                was_refactored = (refactored_content != text_content)
+            except Exception as exc:
+                print(f"[Conversion] Error en refactor_conversion_code: {exc}")
+                refactored_content = text_content
+
+        return {
+            "success": True,
+            "type": "code",
+            "content": refactored_content,
+            "raw_content": text_content,
+            "filename": req.filename,
+            "was_refactored": was_refactored,
+        }
+
+@router.post("/refactor-code")
+def refactor_code_endpoint(req: RefactorCodeRequest):
+    try:
+        refactored = refactor_conversion_code(req.code, req.report_code)
+        return {"success": True, "refactored_code": refactored}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error refactorizando código a V2: {str(e)}")
 
 @router.post("/upload-sample")
 async def upload_sample(file: UploadFile = File(...)):
