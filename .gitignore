@@ -1,0 +1,109 @@
+# =============================================================================
+# DATAX Migration Studio - .gitignore
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Environment & Sensitive Credentials
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# -----------------------------------------------------------------------------
+# Python Artifacts & Caches
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing, Coverage & Linters
+.pytest_cache/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.mypy_cache/
+.ruff_cache/
+
+# -----------------------------------------------------------------------------
+# Node & Frontend (Vite / React)
+# -----------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+dist/
+dist-ssr/
+*.local
+
+# -----------------------------------------------------------------------------
+# Runtime Data, Downloads & Attachments
+# -----------------------------------------------------------------------------
+attachtments/*
+!attachtments/.gitkeep
+server/attachtments/*
+!server/attachtments/.gitkeep
+
+# -----------------------------------------------------------------------------
+# Logs & Temporary Files
+# -----------------------------------------------------------------------------
+logs/
+*.log
+*.tmp
+*.temp
+
+# -----------------------------------------------------------------------------
+# IDE & System Files
+# -----------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini

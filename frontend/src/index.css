@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #ffffff;
+  --color-paper: #ffffff;
+  --color-cloud: #f7f7f7;
+  --color-fog: #e8e8e8;
+  --color-steel: #c2c2c2;
+  --color-hairline: #e8e8e8;
+  
+  --color-hp-blue: #024ad8;
+  --color-hp-blue-bright: #296ef9;
+  --color-hp-blue-deep: #0e3191;
+  --color-hp-blue-soft: #c9e0fc;
+  
+  --color-ink: #1a1a1a;
+  --color-ink-deep: #000000;
+  --color-ink-soft: #292929;
+  --color-on-ink: #ffffff;
+  --color-charcoal: #3d3d3d;
+  --color-graphite: #636363;
+  
+  --color-bloom-coral: #ff5050;
+  --color-bloom-rose: #f9d4d2;
+  --color-bloom-deep: #b3262b;
+  --color-bloom-wine: #5a1313;
+  
+  --color-storm-mist: #8ebdce;
+  --color-storm-sea: #7fadbe;
+  --color-storm-deep: #356373;
+
+  --font-sans: 'Inter', 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 16px;
+  --radius-pill: 9999px;
+
+  --shadow-soft-lift: 0 2px 8px rgba(26, 26, 26, 0.08);
+  --shadow-floating: 0 8px 24px rgba(26, 26, 26, 0.12);
+}
+
+/* Custom base styles */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  line-height: 1.4;
+  margin: 0;
+  padding: 0;
+}
+
+/* HP Design Typography Utilities */
+.hp-display {
+  font-weight: 500;
+  line-height: 1.0;
+  letter-spacing: -0.02em;
+}
+
+.hp-btn {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  border-radius: 4px;
+  height: 40px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease-in-out;
+}
+
+.hp-btn-primary {
+  background-color: var(--color-hp-blue);
+  color: #ffffff;
+}
+
+.hp-btn-primary:hover {
+  background-color: var(--color-hp-blue-bright);
+}
+
+.hp-btn-primary:active {
+  background-color: var(--color-hp-blue-deep);
+}
+
+.hp-btn-ink {
+  background-color: var(--color-ink);
+  color: #ffffff;
+}
+
+.hp-btn-ink:hover {
+  background-color: var(--color-ink-soft);
+}
+
+.hp-btn-outline {
+  background-color: var(--color-canvas);
+  color: var(--color-hp-blue);
+  border: 1px solid var(--color-hp-blue);
+}
+
+.hp-btn-outline:hover {
+  background-color: var(--color-hp-blue-soft);
+}
+
+.hp-btn-outline-ink {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-fog);
+}
+
+.hp-btn-outline-ink:hover {
+  border-color: var(--color-ink);
+}
+
+.hp-card {
+  background-color: var(--color-paper);
+  border-radius: 16px;
+  border: 1px solid var(--color-hairline);
+  box-shadow: 0 2px 8px rgba(26, 26, 26, 0.08);
+}
+
+.hp-chevron {
+  display: inline-block;
+  width: 14px;
+  height: 28px;
+  background-color: var(--color-hp-blue);
+  transform: skewX(-25deg);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

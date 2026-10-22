@@ -1,0 +1,8 @@
+import axios from "axios";
+
+export const api = axios.create({
+  baseURL: "/api",
+  timeout: 120000,
+});
+
+export default api;
