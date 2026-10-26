@@ -228,8 +228,16 @@ async def force_dag(req: ForceDagRequest):
 @router.post("/test-v2")
 async def test_v2(req: TestV2DownloadRequest):
     cfg = get_current_config()
-    await log_manager.broadcast(f"Ejecutando suite de test V2 para {req.code}...", "info", "download")
-    res = test_download_robot_v2(req.code, cfg["new_repo"], req.test_updated_to)
+    engine = get_engine()
+    db_info = get_download_db_info(req.code, engine) if engine else None
+    download_type = db_info.get("download_type", "") if db_info else ""
+    await log_manager.broadcast(f"Ejecutando suite de test V2 para {req.code} (Fecha: {req.test_updated_to}, Tipo: {download_type or 'Auto'})...", "info", "download")
+    res = test_download_robot_v2(
+        code=req.code,
+        new_repo_path=cfg["new_repo"],
+        download_type=download_type,
+        test_updated_to=req.test_updated_to
+    )
     for l in res.get("logs", []):
         lvl = "error" if "FAIL" in l or "ERROR" in l else "info"
         await log_manager.broadcast(l, lvl, "download")

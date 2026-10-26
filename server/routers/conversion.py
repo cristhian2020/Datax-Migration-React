@@ -129,13 +129,11 @@ def get_custom_family(req: CustomFamilyRequest):
 
     db_info = get_conversion_db_info(rep_code, engine) if engine else None
 
-    # Check local samples in attachments and repos
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    local_att = os.path.join(root_dir, "attachtments")
+    # Check samples across V2, V1 and attachments
     old_fam = os.path.join(old_repo, "models", "conversion", parent_code)
     new_fam = os.path.join(new_repo, "models", "conversion", parent_code)
     
-    samples = detect_available_samples(parent_code, old_fam, local_att)
+    samples = detect_available_samples(parent_code, old_repo, new_repo)
     if os.path.isdir(new_fam):
         for f in os.listdir(new_fam):
             if f.lower().endswith((".xlsx", ".xls", ".pdf", ".csv")):
@@ -182,26 +180,47 @@ def get_family_detail(parent_code: str):
 
     sub_reports = []
     samples = []
-    
+    seen_codes = set()
+
+    # 1. Escanear carpeta destino V2 (para robots creados directamente en V2 como C_BO_000000213)
+    if os.path.isdir(v2_fam_path):
+        for f in os.listdir(v2_fam_path):
+            p = os.path.join(v2_fam_path, f)
+            if f.endswith(".py") and not f.startswith("__"):
+                code = f.replace(".py", "")
+                db_info = get_conversion_db_info(code, engine) if engine else None
+                v1_py = os.path.join(old_fam_path, f) if os.path.isdir(old_fam_path) else ""
+                sub_reports.append({
+                    "code": code,
+                    "v1_file": v1_py if (v1_py and os.path.isfile(v1_py)) else "",
+                    "has_v2": True,
+                    "v2_file": p,
+                    "db_info": db_info
+                })
+                seen_codes.add(code)
+            elif f.lower().endswith((".xlsx", ".xls", ".pdf", ".csv")):
+                samples.append(p)
+
+    # 2. Escanear carpeta origen V1
     if os.path.isdir(old_fam_path):
         for f in os.listdir(old_fam_path):
             p = os.path.join(old_fam_path, f)
             if f.endswith(".py") and not f.startswith("__"):
                 code = f.replace(".py", "")
-                db_info = get_conversion_db_info(code, engine) if engine else None
-                v2_py = os.path.join(v2_fam_path, f)
-                sub_reports.append({
-                    "code": code,
-                    "v1_file": p,
-                    "has_v2": os.path.isfile(v2_py),
-                    "db_info": db_info
-                })
+                if code not in seen_codes:
+                    db_info = get_conversion_db_info(code, engine) if engine else None
+                    v2_py = os.path.join(v2_fam_path, f)
+                    sub_reports.append({
+                        "code": code,
+                        "v1_file": p,
+                        "has_v2": os.path.isfile(v2_py),
+                        "db_info": db_info
+                    })
+                    seen_codes.add(code)
             elif f.lower().endswith((".xlsx", ".xls", ".pdf", ".csv")):
                 samples.append(p)
 
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    local_att = os.path.join(root_dir, "attachtments")
-    extra_samples = detect_available_samples(parent_code, old_fam_path, local_att)
+    extra_samples = detect_available_samples(parent_code, old_repo, new_repo)
 
     return {
         "parent_code": parent_code,
@@ -318,15 +337,96 @@ def refactor_code_endpoint(req: RefactorCodeRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error refactorizando código a V2: {str(e)}")
 
+@router.post("/upload-samples")
 @router.post("/upload-sample")
-async def upload_sample(file: UploadFile = File(...)):
+async def upload_samples(
+    files: List[UploadFile] = File(default=[]),
+    file: Optional[UploadFile] = File(default=None),
+    parent_code: Optional[str] = Form(""),
+    report_code: Optional[str] = Form("")
+):
+    cfg = get_current_config()
+    new_repo = cfg["new_repo"]
+
+    all_files = []
+    if files:
+        all_files.extend(files)
+    if file:
+        all_files.append(file)
+
+    if not all_files:
+        raise HTTPException(status_code=400, detail="No se seleccionó ningún archivo para subir.")
+
+    # Derivar parent_code si solo se especificó report_code
+    clean_parent = (parent_code or "").strip()
+    if not clean_parent and report_code:
+        parts = report_code.strip().split("_")
+        clean_parent = f"C_{parts[1]}_{parts[2]}" if len(parts) >= 3 else report_code.replace("D_", "C_")
+
+    saved_info = []
+
+    # Rutas de destino:
+    # 1. new_repo/models/conversion/{clean_parent} (si hay familia)
+    # 2. new_repo/attachtments
+    # 3. local app/attachtments
+    v2_fam_dir = os.path.join(new_repo, "models", "conversion", clean_parent) if clean_parent else None
+    if v2_fam_dir:
+        os.makedirs(v2_fam_dir, exist_ok=True)
+
+    v2_att_dir = os.path.join(new_repo, "attachtments")
+    os.makedirs(v2_att_dir, exist_ok=True)
+
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    att_dir = os.path.join(root_dir, "attachtments")
-    os.makedirs(att_dir, exist_ok=True)
-    target_path = os.path.join(att_dir, file.filename)
-    with open(target_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    return {"success": True, "path": target_path, "filename": file.filename}
+    local_att_dir = os.path.join(root_dir, "attachtments")
+    os.makedirs(local_att_dir, exist_ok=True)
+
+    for up in all_files:
+        fname = os.path.basename(up.filename)
+        content_bytes = await up.read()
+
+        # Guardar en local app attachtments
+        loc_path = os.path.join(local_att_dir, fname)
+        with open(loc_path, "wb") as f_out:
+            f_out.write(content_bytes)
+
+        # Guardar en V2 attachtments (Oficial DATAX)
+        v2_att_path = os.path.join(v2_att_dir, fname)
+        with open(v2_att_path, "wb") as f_out:
+            f_out.write(content_bytes)
+
+        # Guardar en V2 models/conversion/{clean_parent}
+        primary_path = v2_att_path
+        if v2_fam_dir:
+            fam_path = os.path.join(v2_fam_dir, fname)
+            with open(fam_path, "wb") as f_out:
+                f_out.write(content_bytes)
+            primary_path = fam_path
+
+        saved_info.append({
+            "filename": fname,
+            "path": primary_path,
+            "size": len(content_bytes)
+        })
+
+    paths = [s["path"] for s in saved_info]
+    filenames = [s["filename"] for s in saved_info]
+
+    await log_manager.broadcast(
+        f"[UPLOAD V2] {len(saved_info)} archivo(s) guardado(s) exitosamente en V2 ({v2_fam_dir or v2_att_dir}): {', '.join(filenames)}",
+        "info",
+        "conversion"
+    )
+
+    return {
+        "success": True,
+        "count": len(saved_info),
+        "files": saved_info,
+        "paths": paths,
+        "path": paths[0] if paths else "",
+        "filename": filenames[0] if filenames else "",
+        "saved_in_v2": True,
+        "v2_location": v2_fam_dir or v2_att_dir
+    }
 
 
 class ValidateConversionCodeRequest(BaseModel):
@@ -387,6 +487,56 @@ async def run_test(req: RunConversionTestRequest):
         await log_manager.broadcast(f"[DIAGNÓSTICO] {d}", "warning", "conversion")
 
     return res
+
+
+class BatchTestRequest(BaseModel):
+    code: str
+    sample_files: List[str]
+    skip_text_match: bool = True
+    page_number: int = 1
+
+@router.post("/run-batch-tests")
+async def run_batch_tests(req: BatchTestRequest):
+    cfg = get_current_config()
+    new_repo = cfg["new_repo"]
+    results = []
+
+    await log_manager.broadcast(f"[LOTE] Iniciando prueba en lote de {len(req.sample_files)} archivos para {req.code}...", "info", "conversion")
+
+    for idx, sfile in enumerate(req.sample_files):
+        fname = os.path.basename(sfile)
+        await log_manager.broadcast(f"[{idx+1}/{len(req.sample_files)}] Procesando {fname}...", "info", "conversion")
+        res = run_conversion_step_test(
+            report_code=req.code,
+            sample_file_path=sfile,
+            new_repo_path=new_repo,
+            skip_text_match=req.skip_text_match
+        )
+        is_ok = res.get("success", False)
+        status_tag = "OK" if is_ok else "FAIL"
+        await log_manager.broadcast(f"[{idx+1}/{len(req.sample_files)}] {fname} -> {status_tag}", "info" if is_ok else "error", "conversion")
+        results.append({
+            "file": fname,
+            "path": sfile,
+            "success": is_ok,
+            "stdout": res.get("stdout", ""),
+            "stderr": res.get("stderr", ""),
+            "sqlite_created": res.get("sqlite_created", False),
+            "diagnostics": res.get("diagnostics", [])
+        })
+
+    all_ok = all(r["success"] for r in results)
+    passed_cnt = sum(1 for r in results if r["success"])
+    await log_manager.broadcast(f"[LOTE RESUMEN] Finalizado: {passed_cnt}/{len(results)} archivos exitosos.", "info" if all_ok else "warning", "conversion")
+
+    return {
+        "success": all_ok,
+        "total": len(results),
+        "passed": passed_cnt,
+        "failed": len(results) - passed_cnt,
+        "results": results
+    }
+
 
 @router.get("/sqlite-data/{code}")
 def get_sqlite(code: str, limit: int = 100):

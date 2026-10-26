@@ -74,6 +74,26 @@ export function DownloadView({ externalLogs = [] }) {
   const [sshPass, setSshPass] = useState("");
   const [generateDagServer, setGenerateDagServer] = useState(true);
   const [triggerDagServer, setTriggerDagServer] = useState(false);
+  const [testingSsh, setTestingSsh] = useState(false);
+
+  // Cargar credenciales SSH sensibles dinámicamente desde .env vía backend
+  useEffect(() => {
+    const fetchSshConfigFromEnv = async () => {
+      try {
+        const res = await api.get("/config");
+        if (res.data?.config) {
+          const cfg = res.data.config;
+          if (cfg.ssh_host) setSshHost(cfg.ssh_host);
+          if (cfg.ssh_port) setSshPort(cfg.ssh_port);
+          if (cfg.ssh_user) setSshUser(cfg.ssh_user);
+          if (cfg.ssh_pass) setSshPass(cfg.ssh_pass);
+        }
+      } catch (e) {
+        console.error("Error al cargar credenciales de .env en DownloadView:", e);
+      }
+    };
+    fetchSshConfigFromEnv();
+  }, []);
 
   useEffect(() => {
     loadRobots();
@@ -265,7 +285,7 @@ export function DownloadView({ externalLogs = [] }) {
         skip_test: skipTest,
         skip_dag: !generateDag,
         test_updated_to: testDate,
-      });
+      }, { timeout: 300000 });
       if (res.data.logs) {
         setLocalLogs((prev) => [...prev, ...res.data.logs]);
       }
@@ -296,7 +316,7 @@ export function DownloadView({ externalLogs = [] }) {
       const res = await api.post("/download/test-v2", {
         code: selectedCode,
         test_updated_to: testDate,
-      });
+      }, { timeout: 300000 });
       if (res.data.logs) {
         setLocalLogs((prev) => [...prev, ...res.data.logs]);
       }
@@ -389,6 +409,53 @@ export function DownloadView({ externalLogs = [] }) {
       ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTestSsh = async () => {
+    setTestingSsh(true);
+    setLocalLogs((prev) => [
+      ...prev,
+      `[SSH TEST] Probando conexión con ${sshUser}@${sshHost}:${sshPort}...`,
+    ]);
+    try {
+      const res = await api.post("/config/test-ssh", {
+        host: sshHost,
+        port: parseInt(sshPort) || 22,
+        user: sshUser,
+        password: sshPass,
+      });
+      if (res.data?.success) {
+        setToast({
+          type: "success",
+          title: "Conexión SSH Exitosa",
+          message: res.data.message || `Conectado correctamente a ${sshHost}:${sshPort}`,
+        });
+        setLocalLogs((prev) => [
+          ...prev,
+          `[SSH TEST OK] ${res.data.message || "Conexión exitosa"}`,
+        ]);
+      } else {
+        setToast({
+          type: "error",
+          title: "Fallo de Conexión SSH",
+          message: res.data.message || "No se pudo conectar al servidor SSH.",
+        });
+        setLocalLogs((prev) => [
+          ...prev,
+          `[SSH TEST ERROR] ${res.data.message || "Fallo de conexión"}`,
+        ]);
+      }
+    } catch (e) {
+      const err = e.response?.data?.detail || e.message;
+      setToast({
+        type: "error",
+        title: "Error SSH",
+        message: err,
+      });
+      setLocalLogs((prev) => [...prev, `[SSH TEST ERROR] ${err}`]);
+    } finally {
+      setTestingSsh(false);
     }
   };
 
@@ -1038,7 +1105,8 @@ export function DownloadView({ externalLogs = [] }) {
                 type="text"
                 value={sshHost}
                 onChange={(e) => setSshHost(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs font-mono border border-[#c2c2c2] rounded-[4px] outline-none"
+                placeholder="Desde .env..."
+                className="w-full px-2.5 py-1.5 text-xs font-mono border border-[#c2c2c2] rounded-[4px] outline-none focus:border-[#024ad8]"
               />
             </div>
 
@@ -1050,7 +1118,7 @@ export function DownloadView({ externalLogs = [] }) {
                 type="number"
                 value={sshPort}
                 onChange={(e) => setSshPort(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs font-mono border border-[#c2c2c2] rounded-[4px] outline-none"
+                className="w-full px-2.5 py-1.5 text-xs font-mono border border-[#c2c2c2] rounded-[4px] outline-none focus:border-[#024ad8]"
               />
             </div>
 
@@ -1062,7 +1130,8 @@ export function DownloadView({ externalLogs = [] }) {
                 type="text"
                 value={sshUser}
                 onChange={(e) => setSshUser(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs font-mono border border-[#c2c2c2] rounded-[4px] outline-none"
+                placeholder="Desde .env..."
+                className="w-full px-2.5 py-1.5 text-xs font-mono border border-[#c2c2c2] rounded-[4px] outline-none focus:border-[#024ad8]"
               />
             </div>
 
@@ -1074,7 +1143,7 @@ export function DownloadView({ externalLogs = [] }) {
                 type="password"
                 value={sshPass}
                 onChange={(e) => setSshPass(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Contraseña configurada en .env"
                 className="w-full px-2.5 py-1.5 text-xs border border-[#c2c2c2] rounded-[4px] outline-none focus:border-[#024ad8]"
               />
             </div>
@@ -1107,7 +1176,16 @@ export function DownloadView({ externalLogs = [] }) {
             </div>
           </div>
 
-          <div className="flex items-center justify-end pt-2">
+          <div className="flex items-center justify-between pt-2">
+            <button
+              onClick={handleTestSsh}
+              disabled={testingSsh || !sshHost}
+              className="hp-btn hp-btn-outline-ink text-xs px-4 py-2 flex items-center gap-2"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${testingSsh ? "animate-spin" : ""}`} />
+              <span>{testingSsh ? "Verificando..." : "Probar Conexión SSH"}</span>
+            </button>
+
             <button
               onClick={handleDeploy}
               disabled={loading}

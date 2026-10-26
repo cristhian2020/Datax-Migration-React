@@ -53,14 +53,14 @@ export function ConversionView({ externalLogs = [] }) {
   const [selMode, setSelMode] = useState("manual");
 
   // Manual input values
-  const [manualReportInput, setManualReportInput] = useState("D_BO_000000017_01");
-  const [manualParentInput, setManualParentInput] = useState("C_BO_000000017");
+  const [manualReportInput, setManualReportInput] = useState("D_BO_0000000XX_01");
+  const [manualParentInput, setManualParentInput] = useState("C_BO_0000000XX");
 
   // Code source options: "github", "paste", "upload", "local"
   const [codeSourceMode, setCodeSourceMode] = useState("github");
 
   // GitHub PR states
-  const [prSearchQuery, setPrSearchQuery] = useState("D_BO_000000017_01");
+  const [prSearchQuery, setPrSearchQuery] = useState("D_BO_0000000XX_01");
   const [prsList, setPrsList] = useState([]);
   const [selectedPrNumber, setSelectedPrNumber] = useState(null);
   const [prFiles, setPrFiles] = useState([]);
@@ -72,12 +72,15 @@ export function ConversionView({ externalLogs = [] }) {
 
   // Families & Reports
   const [families, setFamilies] = useState([]);
-  const [selectedParent, setSelectedParent] = useState("C_BO_000000017");
+  const [selectedParent, setSelectedParent] = useState("C_BO_0000000XX");
   const [familyDetail, setFamilyDetail] = useState(null);
-  const [selectedSubReport, setSelectedSubReport] = useState("D_BO_000000017_01");
+  const [selectedSubReport, setSelectedSubReport] = useState("D_BO_0000000XX_01");
   const [reportDbInfo, setReportDbInfo] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const [runningTestType, setRunningTestType] = useState(null);
+  const [runningBatchTest, setRunningBatchTest] = useState(false);
+  const [batchTestResults, setBatchTestResults] = useState(null);
+  const [uploadingSamples, setUploadingSamples] = useState(false);
 
   // Code editors
   const [v1Code, setV1Code] = useState("");
@@ -341,25 +344,88 @@ export function ConversionView({ externalLogs = [] }) {
   };
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploadingSamples(true);
     const formData = new FormData();
-    formData.append("file", file);
+    for (const f of files) {
+      formData.append("files", f);
+    }
+    const currentParent = selectedParent || manualParentInput;
+    const currentReport = selectedSubReport || manualReportInput;
+    formData.append("parent_code", currentParent || "");
+    formData.append("report_code", currentReport || "");
+
     try {
-      const res = await api.post("/conversion/upload-sample", formData);
-      setSampleFile(res.data.path);
-      setAvailableSamples((prev) => Array.from(new Set([res.data.path, ...prev])));
+      const res = await api.post("/conversion/upload-samples", formData);
+      const newPaths = res.data.paths || (res.data.path ? [res.data.path] : []);
+      
+      setAvailableSamples((prev) => Array.from(new Set([...newPaths, ...prev])));
+      if (newPaths.length > 0) {
+        setSampleFile(newPaths[0]);
+      }
+
       setToast({
         type: "success",
-        title: "Archivo Subido",
-        message: `Archivo '${file.name}' subido correctamente.`,
+        title: `${files.length} Archivo(s) Guardado(s) en V2`,
+        message: `Los ${files.length} archivos fueron subidos y guardados en V2 (${res.data.v2_location || currentParent || 'attachtments'}).`,
+        duration: 5000,
       });
+
+      setLocalLogs((prev) => [
+        ...prev,
+        `[SAMPLES V2] ${files.length} archivo(s) guardado(s) exitosamente en ${res.data.v2_location || 'V2'} y vinculados para pruebas.`
+      ]);
     } catch (err) {
       setToast({
         type: "error",
         title: "Error de Subida",
-        message: "No se pudo subir el archivo de muestra.",
+        message: err.response?.data?.detail || err.message || "No se pudieron subir los archivos de muestra a V2.",
       });
+    } finally {
+      setUploadingSamples(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRunBatchTest = async () => {
+    if (availableSamples.length === 0) return;
+    setRunningBatchTest(true);
+    setBatchTestResults(null);
+    setLocalLogs((prev) => [
+      ...prev,
+      `[LOTE] Iniciando prueba sobre ${availableSamples.length} archivos de muestra para ${selectedSubReport}...`
+    ]);
+    try {
+      const res = await api.post("/conversion/run-batch-tests", {
+        code: selectedSubReport,
+        sample_files: availableSamples,
+        skip_text_match: true,
+        page_number: parseInt(pageNumber) || 1,
+      });
+      setBatchTestResults(res.data);
+      if (res.data.success) {
+        setToast({
+          type: "success",
+          title: "Prueba en Lote Exitosa",
+          message: `Los ${res.data.total} archivos fueron procesados correctamente sin errores.`,
+        });
+        loadSqlite(selectedSubReport);
+      } else {
+        setToast({
+          type: "warning",
+          title: "Discrepancias en Lote",
+          message: `${res.data.passed}/${res.data.total} archivos procesados con éxito. Revise el detalle de cada departamento.`,
+        });
+      }
+    } catch (err) {
+      setToast({
+        type: "error",
+        title: "Error en Prueba en Lote",
+        message: err.response?.data?.detail || err.message,
+      });
+    } finally {
+      setRunningBatchTest(false);
     }
   };
 
@@ -916,37 +982,79 @@ export function ConversionView({ externalLogs = [] }) {
 
           {/* Sample file selection */}
           <div className="hp-card p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm text-[#1a1a1a] flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-[#024ad8]" />
-                <span>Archivo de Muestra para Pruebas</span>
-              </h3>
-              <label className="hp-btn hp-btn-outline text-xs cursor-pointer">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Subir Nueva Muestra</span>
-                <input type="file" onChange={handleFileUpload} className="hidden" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="font-bold text-sm text-[#1a1a1a] flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-[#024ad8]" />
+                  <span>Archivos de Muestra para Pruebas</span>
+                </h3>
+                <p className="text-xs text-[#636363] mt-0.5">
+                  Selecciona múltiples archivos (con Ctrl/Shift) para subirlos y guardarlos juntos en V2 (models/conversion y attachtments).
+                </p>
+              </div>
+              <label className="hp-btn hp-btn-primary text-xs cursor-pointer flex items-center gap-1.5 self-start sm:self-auto shadow-xs">
+                {uploadingSamples ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
+                )}
+                <span>{uploadingSamples ? "Guardando en V2..." : "Subir Muestras a V2 (Multi-archivo)"}</span>
+                <input type="file" multiple onChange={handleFileUpload} className="hidden" />
               </label>
             </div>
 
             {availableSamples.length > 0 ? (
-              <div>
-                <label className="text-xs text-[#636363] block mb-1">Muestras detectadas en la carpeta / attachments:</label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="text-[#636363]">
+                    Muestras disponibles en V2 ({selectedParent || "Familia"}):
+                  </label>
+                  <span className="font-bold text-[#024ad8] bg-blue-50 px-2.5 py-0.5 rounded text-[11px] border border-blue-200">
+                    {availableSamples.length} archivo(s) detectado(s)
+                  </span>
+                </div>
                 <select
                   value={sampleFile}
                   onChange={(e) => setSampleFile(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-mono border border-[#c2c2c2] rounded-[4px] bg-white outline-none"
+                  className="w-full px-3 py-2 text-xs font-mono border border-[#c2c2c2] rounded-[4px] bg-white outline-none focus:border-[#024ad8]"
                 >
-                  {availableSamples.map((s, idx) => (
-                    <option key={idx} value={s}>
-                      {s.split(/[\\/]/).pop()} ({s})
-                    </option>
-                  ))}
+                  {availableSamples.map((s, idx) => {
+                    const fname = s.split(/[\\/]/).pop();
+                    return (
+                      <option key={idx} value={s}>
+                        📄 {fname}
+                      </option>
+                    );
+                  })}
                 </select>
+
+                {/* Badges interactivos para alternar rápidamente entre archivos */}
+                <div className="flex flex-wrap gap-1.5 pt-1 max-h-24 overflow-y-auto">
+                  {availableSamples.map((s, idx) => {
+                    const fname = s.split(/[\\/]/).pop();
+                    const isSelected = sampleFile === s;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSampleFile(s)}
+                        className={`text-[10px] font-mono px-2 py-0.5 rounded transition-all flex items-center gap-1 ${
+                          isSelected
+                            ? "bg-[#024ad8] text-white font-bold shadow-xs"
+                            : "bg-[#f0f0f0] text-[#3d3d3d] hover:bg-slate-200"
+                        }`}
+                      >
+                        <span>{fname}</span>
+                        {isSelected && <span className="text-[9px]">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-[4px] text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>No se detectó ninguna muestra (.xlsx, .pdf, .csv). Puedes subir una con el botón de arriba o descargarla desde un Pull Request abajo.</span>
+                <span>No se detectó ninguna muestra (.xlsx, .xls, .pdf, .csv). Pulsa el botón de arriba para subir uno o varios archivos simultáneamente.</span>
               </div>
             )}
           </div>
@@ -1200,9 +1308,16 @@ export function ConversionView({ externalLogs = [] }) {
             {/* Configuración de Entrada */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#f7f7f7] p-4 rounded-[6px] border border-[#e8e8e8]">
               <div>
-                <label className="text-xs font-bold text-[#1a1a1a] block mb-1">
-                  Archivo de Muestra Activo (Sample):
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-[#1a1a1a]">
+                    Archivo de Muestra Activo ({availableSamples.length}):
+                  </label>
+                  <label className="text-[11px] text-[#024ad8] hover:underline font-semibold cursor-pointer flex items-center gap-1">
+                    <Upload className="w-3 h-3" />
+                    <span>+ Subir más a V2</span>
+                    <input type="file" multiple onChange={handleFileUpload} className="hidden" />
+                  </label>
+                </div>
                 {availableSamples.length > 0 ? (
                   <select
                     value={sampleFile}

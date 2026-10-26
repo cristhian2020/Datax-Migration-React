@@ -227,11 +227,11 @@ def refactor_conversion_code(raw_code: str, report_code: str) -> str:
 
 
 def detect_available_samples(parent_code: str, old_repo_path: str, new_repo_path: str) -> List[str]:
-    """Detecta archivos de muestra (.pdf, .xlsx, .xls, .csv) en origen y destino."""
+    """Detecta archivos de muestra (.pdf, .xlsx, .xls, .csv) en destino (V2), origen (V1) y attachtments."""
     samples = []
     seen = set()
 
-    # Buscar en carpeta destino (V2)
+    # 1. Buscar en carpeta destino V2 (models/conversion/{parent_code})
     dest_dir = os.path.join(new_repo_path, "models", "conversion", parent_code)
     if os.path.isdir(dest_dir):
         for f in os.listdir(dest_dir):
@@ -240,7 +240,20 @@ def detect_available_samples(parent_code: str, old_repo_path: str, new_repo_path
                 samples.append(p)
                 seen.add(f.lower())
 
-    # Buscar en carpeta origen (V1)
+    # 2. Buscar en attachtments de V2 (new_repo/attachtments)
+    v2_att = os.path.join(new_repo_path, "attachtments")
+    if os.path.isdir(v2_att):
+        for f in os.listdir(v2_att):
+            if f.lower().endswith((".pdf", ".xlsx", ".xls", ".csv")) and f.lower() not in seen:
+                clean_parent = parent_code.lower()
+                clean_num = parent_code.split("_")[-1] if "_" in parent_code else ""
+                clean_f = f.lower()
+                if clean_parent in clean_f or (clean_num and clean_num in clean_f) or ("ingresos" in clean_f and "213" in clean_parent):
+                    p = os.path.join(v2_att, f)
+                    samples.append(p)
+                    seen.add(f.lower())
+
+    # 3. Buscar en carpeta origen V1 (models/conversion/{parent_code})
     for folder_candidate in [parent_code, parent_code.replace("C_", "D_")]:
         src_dir = os.path.join(old_repo_path, "models", "conversion", folder_candidate)
         if os.path.isdir(src_dir):
@@ -249,6 +262,20 @@ def detect_available_samples(parent_code: str, old_repo_path: str, new_repo_path
                     p = os.path.join(src_dir, f)
                     samples.append(p)
                     seen.add(f.lower())
+
+    # 4. Buscar en attachtments local de la aplicación
+    app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    for att_candidate in [os.path.join(app_root, "attachtments"), os.path.join(app_root, "server", "attachtments")]:
+        if os.path.isdir(att_candidate):
+            for f in os.listdir(att_candidate):
+                if f.lower().endswith((".pdf", ".xlsx", ".xls", ".csv")) and f.lower() not in seen:
+                    clean_parent = parent_code.lower()
+                    clean_num = parent_code.split("_")[-1] if "_" in parent_code else ""
+                    clean_f = f.lower()
+                    if clean_parent in clean_f or (clean_num and clean_num in clean_f) or ("ingresos" in clean_f and "213" in clean_parent) or len(samples) == 0:
+                        p = os.path.join(att_candidate, f)
+                        samples.append(p)
+                        seen.add(f.lower())
 
     return samples
 

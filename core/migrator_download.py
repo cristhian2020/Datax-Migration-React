@@ -354,7 +354,7 @@ def apply_download_migration(code: str, source_file: str, new_repo_path: str, do
                 env["CODE_ROBOT"] = code
                 env["UPDATED_TO"] = test_updated_to
 
-                res = subprocess.run([sys.executable, "-m", "unittest", test_path], cwd=new_repo_path, env=env, capture_output=True, text=True)
+                res = subprocess.run([sys.executable, "-m", "unittest", test_path], cwd=new_repo_path, env=env, capture_output=True, text=True, timeout=240)
                 test_output = res.stderr or res.stdout
                 if res.returncode == 0:
                     logs.append(f"🎉 Test unitario APROBADO (OK)")
@@ -478,7 +478,7 @@ def test_download_robot_v2(code: str, new_repo_path: str, download_type: str = "
     env["UPDATED_TO"] = test_updated_to
 
     try:
-        res = subprocess.run([sys.executable, "-m", "unittest", test_path], cwd=new_repo_path, env=env, capture_output=True, text=True)
+        res = subprocess.run([sys.executable, "-m", "unittest", test_path], cwd=new_repo_path, env=env, capture_output=True, text=True, timeout=240)
         test_output = res.stderr or res.stdout
         if res.returncode == 0:
             logs.append("🎉 Test unitario APROBADO (OK)")
@@ -488,6 +488,9 @@ def test_download_robot_v2(code: str, new_repo_path: str, download_type: str = "
             diagnostics = diagnose_download_test_failure(test_output, test_updated_to, code)
             for d in diagnostics:
                 logs.append(f"💡 {d}")
+    except subprocess.TimeoutExpired:
+        logs.append(f"❌ El test unitario fue cancelado porque excedió el tiempo límite de ejecución (240 segundos). Verifica la conexión al portal o ajusta la fecha 'updated_to'.")
+        success = False
     except Exception as exc:
         logs.append(f"❌ Error al ejecutar test: {exc}")
         success = False
