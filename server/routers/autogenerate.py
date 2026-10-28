@@ -97,7 +97,9 @@ def get_story_detail(story_ref: int):
             raise HTTPException(status_code=404, detail=msg)
         return {
             "detail": detail,
-            "attachments": detail.get("all_attachments", [])
+            "attachments": detail.get("all_attachments", []),
+            "custom_attributes": detail.get("custom_attributes", {}),
+            "convert_image": detail.get("convert_image", "")
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo detalle de historia: {str(e)}")
@@ -134,23 +136,66 @@ def inspect_sample(sample_path: str):
 
 @router.post("/generate-robot")
 async def generate_robot(req: GenerateRobotRequest):
-    cfg = get_current_config()
-    await log_manager.broadcast(f"Generando robot {req.report_code} con IA...", "info", "autogenerate")
-    generator = AgentGenerator(api_key=cfg.get("gemini_api_key") or "")
-    
-    code, summary = generator.generate_robot_code(
-        report_code=req.report_code,
-        robot_type=req.robot_type,
-        sample_path=req.sample_path,
-        extra_instructions=req.instructions
-    )
-    
-    await log_manager.broadcast("Código generado con éxito!", "info", "autogenerate")
-    return {
-        "report_code": req.report_code,
-        "robot_code": code,
-        "summary": summary
-    }
+    try:
+        cfg = get_current_config()
+        api_key = cfg.get("gemini_api_key") or ""
+        if not api_key:
+            raise HTTPException(status_code=400, detail="GEMINI_API_KEY no configurada. Por favor define GEMINI_API_KEY en tu archivo .env.")
+
+        # Resolver sample_path y descartar imágenes (.png/.jpg) en favor de datos (.xlsx/.xls/.pdf)
+        sample = req.sample_path
+        if sample and not os.path.isfile(sample):
+            candidates = [
+                os.path.join(cfg.get("new_repo", "."), "attachtments", os.path.basename(sample)),
+                os.path.join(".", "attachtments", os.path.basename(sample)),
+                os.path.join(cfg.get("new_repo", "."), "models", "conversion", req.report_code.split("_")[0] if "_" in req.report_code else "", os.path.basename(sample))
+            ]
+            for c in candidates:
+                if os.path.isfile(c):
+                    sample = c
+                    break
+
+        # Si el usuario seleccionó una imagen (.png, .jpg) o está vacío, buscar automáticamente el Excel/PDF del reporte
+        sample_ext = os.path.splitext(sample)[1].lower() if sample else ""
+        if sample_ext in (".png", ".jpg", ".jpeg", ".webp", ".gif", "") or not os.path.isfile(sample):
+            clean_num = "".join(filter(str.isdigit, req.report_code))
+            search_dirs = [
+                os.path.join(cfg.get("new_repo", "."), "attachtments"),
+                os.path.join(".", "attachtments"),
+                os.path.join(cfg.get("new_repo", "."), "models", "conversion", f"C_BO_{clean_num[:9]}" if len(clean_num) >= 9 else "")
+            ]
+            for s_dir in search_dirs:
+                if os.path.isdir(s_dir):
+                    for fname in os.listdir(s_dir):
+                        f_ext = os.path.splitext(fname)[1].lower()
+                        if f_ext in (".xlsx", ".xls", ".pdf") and (clean_num in fname or req.report_code in fname):
+                            sample = os.path.join(s_dir, fname)
+                            break
+                if sample and os.path.isfile(sample) and os.path.splitext(sample)[1].lower() in (".xlsx", ".xls", ".pdf"):
+                    break
+
+        await log_manager.broadcast(f"Generando robot {req.report_code} con IA...", "info", "autogenerate")
+        generator = AgentGenerator(api_key=api_key)
+        
+        code, summary = generator.generate_robot_code(
+            report_code=req.report_code,
+            robot_type=req.robot_type,
+            sample_path=sample,
+            extra_instructions=req.instructions
+        )
+        
+        await log_manager.broadcast("¡Código generado con éxito!", "info", "autogenerate")
+        return {
+            "report_code": req.report_code,
+            "robot_code": code,
+            "summary": summary
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Falla al generar robot: {str(exc)}")
 
 @router.post("/test-robot")
 async def test_robot(req: TestRobotRequest):

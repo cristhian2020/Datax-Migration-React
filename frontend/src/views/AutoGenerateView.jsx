@@ -30,6 +30,7 @@ export function AutoGenerateView({ externalLogs = [] }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedTask, setSelectedTask] = useState(null);
   const [storyDetail, setStoryDetail] = useState(null);
+  const [convertImage, setConvertImage] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [downloadingAtt, setDownloadingAtt] = useState(null);
 
@@ -113,9 +114,22 @@ export function AutoGenerateView({ externalLogs = [] }) {
     try {
       const res = await api.get(`/autogenerate/story/${task.ref}`);
       setStoryDetail(res.data.detail);
-      setAttachments(res.data.attachments || []);
+        const convImg = res.data.convert_image || res.data.detail?.convert_image || "";
+        setConvertImage(convImg);
+        if (convImg) {
+          extra = `EJEMPLO OFICIAL DE NIVELES (Convert Image):\n${convImg}\n\n` + extra;
+          setInstructions(extra.trim());
+        }
+      const rawAtts = res.data.attachments || [];
+      const sortedAtts = [...rawAtts].sort((a, b) => {
+        const isDataA = /\.(xlsx|xls|pdf|csv)$/i.test(a.name || "");
+        const isDataB = /\.(xlsx|xls|pdf|csv)$/i.test(b.name || "");
+        return isDataB - isDataA;
+      });
+      setAttachments(sortedAtts);
     } catch (err) {
       setStoryDetail(null);
+        setConvertImage("");
       setAttachments([]);
     }
   };
@@ -161,7 +175,7 @@ export function AutoGenerateView({ externalLogs = [] }) {
         robot_type: robotType,
         sample_path: samplePath,
         instructions: instructions,
-      });
+      }, { timeout: 180000 });
       setGeneratedCode(res.data.robot_code || "");
       setSummary(res.data.summary || []);
       setLocalLogs((prev) => [
@@ -406,29 +420,53 @@ export function AutoGenerateView({ externalLogs = [] }) {
                     <span>Archivos Adjuntos en Taiga ({attachments.length}):</span>
                   </div>
                   <div className="space-y-1 max-h-28 overflow-y-auto">
-                    {attachments.map((att) => (
-                      <div
-                        key={att.id}
-                        className="flex items-center justify-between text-[11px] p-1.5 bg-white rounded border border-[#e8e8e8]"
-                      >
-                        <span className="truncate max-w-[170px]" title={att.name}>
-                          {att.name}
-                        </span>
-                        <button
-                          onClick={() => handleDownloadAttachment(att)}
-                          disabled={downloadingAtt === att.id}
-                          className="px-2 py-0.5 text-[10px] font-semibold bg-[#024ad8] text-white rounded hover:bg-[#023eb5] flex items-center gap-1"
+                    {attachments.map((att) => {
+                      const isData = /\.(xlsx|xls|pdf|csv)$/i.test(att.name || "");
+                      return (
+                        <div
+                          key={att.id}
+                          className={`flex items-center justify-between text-[11px] p-1.5 rounded border transition-all ${
+                            isData ? "bg-emerald-50/50 border-emerald-200" : "bg-white border-[#e8e8e8]"
+                          }`}
                         >
-                          <Download className="w-3 h-3" />
-                          <span>{downloadingAtt === att.id ? "Bajando..." : "Muestra"}</span>
-                        </button>
-                      </div>
-                    ))}
+                          <div className="flex items-center gap-1.5 truncate max-w-[200px]" title={att.name}>
+                            <span className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase tracking-wider ${
+                              isData ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"
+                            }`}>
+                              {isData ? "Datos" : "Img"}
+                            </span>
+                            <span className="truncate text-xs font-mono">{att.name}</span>
+                          </div>
+                          <button
+                            onClick={() => handleDownloadAttachment(att)}
+                            disabled={downloadingAtt === att.id}
+                            className={`px-2 py-0.5 text-[10px] font-semibold rounded flex items-center gap-1 text-white transition-all ${
+                              isData ? "bg-emerald-600 hover:bg-emerald-700 shadow-xs" : "bg-slate-500 hover:bg-slate-600"
+                            }`}
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>{downloadingAtt === att.id ? "Bajando..." : isData ? "Usar Datos" : "Descargar"}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               <div>
+                {convertImage && (
+                  <div className="p-2.5 rounded-[4px] border border-amber-200 bg-amber-50/50 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                      <Table className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Ejemplo de Niveles en Taiga (Convert Image):</span>
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-700 max-h-32 overflow-y-auto whitespace-pre-wrap bg-white p-2 rounded border border-amber-200">
+                      {convertImage}
+                    </div>
+                  </div>
+                )}
+
                 <label className="text-[11px] font-bold text-[#636363] block mb-1">
                   Ruta Muestra (Excel/PDF):
                 </label>

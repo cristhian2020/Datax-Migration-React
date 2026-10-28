@@ -170,10 +170,35 @@ class TaigaClient:
                 data = res.json()
                 # Traer adjuntos si los hay
                 story_id = data.get("id")
+                # 1. Traer adjuntos
                 att_url = f"{self.host}/api/v1/userstories/attachments?object_id={story_id}"
                 att_res = requests.get(att_url, headers=self._headers(), timeout=12)
                 attachments = att_res.json() if att_res.status_code == 200 else []
                 data["all_attachments"] = attachments
+
+                # 2. Traer campos personalizados (Convert Image, cv Description, etc.)
+                custom_attrs = {}
+                try:
+                    proj_id = data.get("project") or self.project_id
+                    defs_url = f"{self.host}/api/v1/userstory-custom-attributes?project={proj_id}"
+                    defs_res = requests.get(defs_url, headers=self._headers(), timeout=8)
+                    defs_map = {str(d['id']): d['name'] for d in defs_res.json()} if defs_res.status_code == 200 else {}
+
+                    vals_url = f"{self.host}/api/v1/userstories/custom-attributes-values/{story_id}"
+                    vals_res = requests.get(vals_url, headers=self._headers(), timeout=8)
+                    if vals_res.status_code == 200:
+                        raw_vals = vals_res.json().get("attributes_values", {})
+                        for attr_id, val in raw_vals.items():
+                            name = defs_map.get(str(attr_id), str(attr_id))
+                            custom_attrs[name] = val
+                except Exception as ex:
+                    print("ERROR FETCHING TAIGA CUSTOM ATTRS:", ex)
+
+                data["custom_attributes"] = custom_attrs
+                data["convert_image"] = custom_attrs.get("Convert Image", "")
+                data["cv_description"] = custom_attrs.get("cv Description", "")
+                data["dl_description"] = custom_attrs.get("dl Description", "")
+
                 return True, "Detalle obtenido.", data
             return False, f"Error {res.status_code}: {res.text}", {}
         except Exception as exc:

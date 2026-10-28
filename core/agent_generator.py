@@ -9,101 +9,34 @@ from core.config import DEFAULT_GEMINI_API_KEY
 
 
 def inspect_sample_file(file_path: str, page_number: int = 1, target_sheet: str = "") -> str:
-    """Inspecciona quirúrgicamente un archivo de muestra (Excel, PDF, CSV) para extraer su estructura y encabezados."""
+    """Inspecciona quirurgicamente un archivo de muestra (Excel, PDF, CSV) para extraer su estructura y encabezados."""
     if not os.path.isfile(file_path):
         return f"El archivo '{file_path}' no existe en disco."
 
     ext = os.path.splitext(file_path)[1].lower()
     summary = []
-    summary.append(f"Archivo: {os.path.basename(file_path)} (extensión: {ext})")
+    summary.append(f"Archivo: {os.path.basename(file_path)} (extension: {ext})")
 
     try:
         if ext in (".xlsx", ".xls", ".xlsm"):
-            import openpyxl
-            wb = openpyxl.load_workbook(file_path, data_only=True, read_only=True)
-            sheet_names = wb.sheetnames
-            summary.append(f"Hojas disponibles en el archivo: {sheet_names}")
-
-            # Seleccionar la hoja correcta
-            selected_sheet_name = None
-            if target_sheet:
-                # Búsqueda exacta o parcial
-                for s in sheet_names:
-                    if target_sheet.lower() in s.lower() or s.lower() in target_sheet.lower():
-                        selected_sheet_name = s
-                        break
-
-            if not selected_sheet_name:
-                # Si la primera hoja es una portada (INICIO, PORTADA, INDICE), buscar la primera con datos reales
-                first_lower = sheet_names[0].lower()
-                if first_lower in ("inicio", "portada", "indice", "índice") and len(sheet_names) > 1:
-                    idx = page_number if 0 < page_number < len(sheet_names) else 1
-                    selected_sheet_name = sheet_names[idx]
-                else:
-                    idx = page_number - 1 if 0 <= (page_number - 1) < len(sheet_names) else 0
-                    selected_sheet_name = sheet_names[idx]
-
-            sheet = wb[selected_sheet_name]
-            summary.append(f"Hoja analizada: '{selected_sheet_name}' (Total filas: {sheet.max_row}, Total cols: {sheet.max_column})")
-
-            rows_data = []
-            has_horizontal_months = False
-            is_percentage_variation = False
-            months_keywords = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-
-            for r_idx, row in enumerate(sheet.iter_rows(values_only=True), start=1):
-                if r_idx > 25:
-                    break
-                row_vals = [str(c).strip() if c is not None else "" for c in row]
-                while row_vals and row_vals[-1] == "":
-                    row_vals.pop()
-                if any(row_vals):
-                    row_str = " | ".join(row_vals[:14])
-                    rows_data.append(f"Fila {r_idx:2d}: {row_str}")
-
-                    # Detectar si hay meses en las columnas de encabezado
-                    row_lower = row_str.lower()
-                    month_matches = sum(1 for m in months_keywords if m in row_lower)
-                    if month_matches >= 3:
-                        has_horizontal_months = True
-                    if "variación porcentual" in row_lower or "porcentaje" in row_lower or "índice" in row_lower or "indice" in row_lower:
-                        is_percentage_variation = True
-
-            wb.close()
-            summary.append("\n".join(rows_data))
-
-            if has_horizontal_months:
-                summary.append(
-                    "\n🚨 ATENCIÓN ARQUITECTURA: Se detectó una tabla HORIZONTAL/TRANSPUESTA. "
-                    "Los Años y Meses están distribuidos en las columnas de encabezado, y los conceptos (ciudades o cuentas) están en las filas. "
-                    "El robot DEBE iterar las columnas de fechas y generar registros [nv1, fecha, valor] des-pivotados."
-                )
-
-            summary.append(
-                "📋 EXTRACCIÓN DE TÍTULOS DE ENCABEZADO (metadata_dict['titles']): "
-                "Observa las filas superiores (filas 1 a 5 antes de la tabla de datos). "
-                "Todas las líneas descriptivas presentes en el encabezado (ej: Fila 2: 'Cuadro Nº 1.2', "
-                "Fila 3: 'BOLIVIA: VARIACIÓN PORCENTUAL...', Fila 4: '(Porcentaje)') DEBEN capturarse en orden como "
-                "elementos separados de la lista 'titles' (ej: titles = [ws.cell(r, 1).value for r in range(2, 5) if ws.cell(r, 1).value]), "
-                "de modo que insert_metadata cree limpiamente las columnas 'titulo1', 'titulo2', 'titulo3' en la tabla final."
-            )
-
-            if is_percentage_variation:
-                summary.append(
-                    "📌 NOTA DE VALIDACIÓN: El reporte contiene variaciones porcentuales o índices ponderados. "
-                    "En validate_data_results(), NO realices suma aditiva de los componentes hacia el Total General (porque los porcentajes ponderados no se suman). "
-                    "Valida que no esté vacío, columnas requeridas, tipo float y sin NaNs."
-                )
+            import pandas as pd
+            df_preview = pd.read_excel(file_path, nrows=25, header=None)
+            summary.append(f"Dimensiones de muestra: {df_preview.shape[0]} filas x {df_preview.shape[1]} columnas")
+            summary.append("Primeras filas del archivo:")
+            for idx, r in df_preview.iterrows():
+                vals = [str(x) for x in r.dropna().tolist()]
+                if vals:
+                    summary.append(f"  Fila {idx}: {vals[:8]}")
 
         elif ext == ".pdf":
             import pdfplumber
             with pdfplumber.open(file_path) as pdf:
                 total_pages = len(pdf.pages)
-                summary.append(f"Total páginas PDF: {total_pages}")
+                summary.append(f"Total paginas PDF: {total_pages}")
                 page_idx = page_number - 1 if 0 <= (page_number - 1) < total_pages else 0
                 page = pdf.pages[page_idx]
                 text = page.extract_text() or ""
-                summary.append(f"Texto extraído de la página {page_idx + 1} (primeros 2000 caracteres):\n")
+                summary.append(f"Texto extraido (primeros 2000 caracteres):")
                 summary.append(text[:2000])
 
         elif ext == ".csv":
@@ -113,12 +46,12 @@ def inspect_sample_file(file_path: str, page_number: int = 1, target_sheet: str 
             summary.append(df.to_string(index=False))
 
         else:
-            summary.append(f"Formato '{ext}' no reconocido para pre-inspección.")
+            summary.append(f"Formato '{ext}' no reconocido para pre-inspeccion.")
 
     except Exception as exc:
-        summary.append(f"Error durante la inspección del archivo: {exc}")
+        summary.append(f"Error durante la inspeccion del archivo: {exc}")
 
-    return "\n".join(summary)
+    return chr(10).join(summary)
 
 
 def load_datax_rules(workspace_dir: str = "") -> str:
@@ -170,14 +103,11 @@ class AgentGenerator:
         self.api_key = api_key
         # Modelos en orden de preferencia y alta disponibilidad (priorizando endpoints lite con cuota activa)
         self.models = [
-            "gemini-flash-lite-latest",
-            "gemini-3.1-flash-lite",
-            "gemini-3.5-flash-lite",
-            "gemini-3.1-flash-lite-preview",
-            "gemini-3.5-flash",
-            "gemini-3.7-flash",
-            "gemini-3-flash-preview",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
             "gemini-flash-latest",
+            "gemini-flash-lite-latest",
+            "gemini-2.5-pro",
         ]
 
     def _call_gemini(self, prompt: str, system_instruction: str = "") -> Tuple[bool, str]:
@@ -255,6 +185,8 @@ class AgentGenerator:
             "1. IMPORTS Y BASE CLASS OBLIGATORIA (ESTÁNDAR ESTRICTO DE DATAX PLATFORM):\n"
             "   from models.conversion.Conversion_Base import Conversion_Base\n"
             "   from models.conversion.tools.conversion_tools import to_numeric_datax\n"
+            "   # REGLA CRITICA: to_numeric_datax(serie: pd.Series, decimal_separator: str) -> pd.Series. NUNCA llamar to_numeric_datax(raw_val) celda por celda.\n"
+            "   # Aplicalo vectorizado: df_melted['valor'] = to_numeric_datax(df_melted['valor'], decimal_separator=decimal_separator)\n"
             "   # REGLA ESTRICTA: NO uses bloques try/except en las importaciones. NO importes desde conversion_tools suelto. Usa directamente models.conversion.\n\n"
             "2. CLASE Y REGLA ESTRICTA DE 2 MÉTODOS:\n"
             f"   class {robot_code}(Conversion_Base):\n"
@@ -444,3 +376,97 @@ Analiza la causa raíz del error (ej. índice fuera de rango, tipos de datos, je
         if ok:
             return True, self._clean_code_block(res)
         return False, res
+
+    def generate_robot_code(
+        self,
+        report_code: str,
+        robot_type: str = "conversion",
+        sample_path: str = "",
+        extra_instructions: str = "",
+        workspace_dir: str = ""
+    ) -> Tuple[str, List[str]]:
+        """
+        Orquesta la generación completa del robot con IA.
+        Retorna (robot_code, summary_list).
+        """
+        rules_text = load_datax_rules(workspace_dir)
+        summary = []
+
+        # Parsear metadatos opcionales de extra_instructions
+        main_url = ""
+        download_type = "Tipo I"
+        updated_to = "2024-01-01"
+        page_number = 1
+        decimal_separator = ","
+        key_words = ""
+        target_sheet = ""
+
+        if extra_instructions:
+            for line in extra_instructions.splitlines():
+                l_str = line.strip()
+                l_low = l_str.lower()
+                if l_low.startswith("url:"):
+                    main_url = l_str.split(":", 1)[1].strip()
+                elif "página:" in l_low or "pagina:" in l_low:
+                    try:
+                        digits = re.sub(r"\D", "", l_str)
+                        if digits:
+                            page_number = int(digits)
+                    except Exception:
+                        pass
+                elif "separador decimal:" in l_low:
+                    decimal_separator = l_str.split(":", 1)[1].strip()
+                elif "palabras clave:" in l_low:
+                    key_words = l_str.split(":", 1)[1].strip()
+                elif "tipo:" in l_low:
+                    download_type = l_str.split(":", 1)[1].strip()
+                elif "hoja:" in l_low:
+                    target_sheet = l_str.split(":", 1)[1].strip()
+                elif "updated_to:" in l_low or "fecha:" in l_low:
+                    updated_to = l_str.split(":", 1)[1].strip()
+
+        # Determinar si es descarga
+        is_download = (robot_type.lower() == "download") or (
+            report_code.startswith("D_") and not re.search(r"_\d{2}$", report_code)
+        )
+
+        if not is_download:
+            inspection_text = ""
+            if sample_path and os.path.isfile(sample_path):
+                summary.append(f"📁 Inspeccionando muestra: {os.path.basename(sample_path)}")
+                try:
+                    inspection_text = inspect_sample_file(sample_path, page_number=page_number, target_sheet=target_sheet)
+                except Exception as e:
+                    inspection_text = f"No se pudo extraer detalle de la muestra: {e}"
+
+            summary.append("📜 Aplicando Regla Estricta de 2 Métodos (extraction, validate_data_results)")
+            ok, res_code = self.generate_conversion_robot(
+                robot_code=report_code,
+                report_name=report_code,
+                page_number=page_number,
+                decimal_separator=decimal_separator,
+                key_words=key_words,
+                sample_inspection=inspection_text,
+                target_sheet=target_sheet,
+                rules_text=rules_text
+            )
+            if not ok:
+                raise RuntimeError(f"Falla en generación con IA: {res_code}")
+
+            summary.append("✅ Estructura base de extracción y validación generada exitosamente.")
+            return res_code, summary
+        else:
+            summary.append(f"🌐 Generando robot de Descarga ({download_type}) para {report_code}")
+            ok, res_code = self.generate_download_robot(
+                robot_code=report_code,
+                download_type=download_type,
+                main_url=main_url,
+                updated_to=updated_to,
+                report_name=report_code,
+                rules_text=rules_text
+            )
+            if not ok:
+                raise RuntimeError(f"Falla en generación con IA: {res_code}")
+
+            summary.append("✅ Estructura oficial de descarga generada exitosamente.")
+            return res_code, summary
