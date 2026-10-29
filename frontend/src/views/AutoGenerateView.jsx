@@ -17,13 +17,15 @@ import {
   Copy,
   RefreshCw,
   Check,
+  Table,
 } from "lucide-react";
 import Editor from "@monaco-editor/react";
 import { api } from "../services/api";
 import { Badge } from "../components/ui/Badge";
 import { TerminalLogs } from "../components/ui/TerminalLogs";
+import { Toast } from "../components/ui/Toast";
 
-export function AutoGenerateView({ externalLogs = [] }) {
+export function AutoGenerateView({ externalLogs = [], onNavigateTab }) {
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -34,7 +36,7 @@ export function AutoGenerateView({ externalLogs = [] }) {
   const [attachments, setAttachments] = useState([]);
   const [downloadingAtt, setDownloadingAtt] = useState(null);
 
-  const [reportCode, setReportCode] = useState("D_BO_000000051_01");
+  const [reportCode, setReportCode] = useState("D_BO_0000000XX_01");
   const [robotType, setRobotType] = useState("conversion");
   const [samplePath, setSamplePath] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -43,6 +45,9 @@ export function AutoGenerateView({ externalLogs = [] }) {
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [localLogs, setLocalLogs] = useState([]);
+  const [exporting, setExporting] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [exportedInfo, setExportedInfo] = useState(null);
 
   // Guide subtab
   const [activeTab, setActiveTab] = useState("agent"); // "agent" or "guides"
@@ -56,7 +61,7 @@ export function AutoGenerateView({ externalLogs = [] }) {
     let res = [...tasks];
     if (statusFilter !== "all") {
       res = res.filter(
-        (t) => (t.status || "").toLowerCase() === statusFilter.toLowerCase()
+        (t) => (t.status || "").toLowerCase() === statusFilter.toLowerCase(),
       );
     }
     if (searchQuery.trim()) {
@@ -66,7 +71,7 @@ export function AutoGenerateView({ externalLogs = [] }) {
           (t.subject || "").toLowerCase().includes(q) ||
           (t.robot_code || "").toLowerCase().includes(q) ||
           (t.assigned_to || "").toLowerCase().includes(q) ||
-          String(t.ref || "").includes(q)
+          String(t.ref || "").includes(q),
       );
     }
     setFilteredTasks(res);
@@ -74,7 +79,10 @@ export function AutoGenerateView({ externalLogs = [] }) {
 
   const loadTasks = async () => {
     try {
-      setLocalLogs((prev) => [...prev, "[Taiga] Consultando historias de usuario..."]);
+      setLocalLogs((prev) => [
+        ...prev,
+        "[Taiga] Consultando historias de usuario...",
+      ]);
       const res = await api.get("/autogenerate/taiga-tasks");
       const list = res.data.tasks || [];
       setTasks(list);
@@ -114,12 +122,14 @@ export function AutoGenerateView({ externalLogs = [] }) {
     try {
       const res = await api.get(`/autogenerate/story/${task.ref}`);
       setStoryDetail(res.data.detail);
-        const convImg = res.data.convert_image || res.data.detail?.convert_image || "";
-        setConvertImage(convImg);
-        if (convImg) {
-          extra = `EJEMPLO OFICIAL DE NIVELES (Convert Image):\n${convImg}\n\n` + extra;
-          setInstructions(extra.trim());
-        }
+      const convImg =
+        res.data.convert_image || res.data.detail?.convert_image || "";
+      setConvertImage(convImg);
+      if (convImg) {
+        extra =
+          `EJEMPLO OFICIAL DE NIVELES (Convert Image):\n${convImg}\n\n` + extra;
+        setInstructions(extra.trim());
+      }
       const rawAtts = res.data.attachments || [];
       const sortedAtts = [...rawAtts].sort((a, b) => {
         const isDataA = /\.(xlsx|xls|pdf|csv)$/i.test(a.name || "");
@@ -129,7 +139,7 @@ export function AutoGenerateView({ externalLogs = [] }) {
       setAttachments(sortedAtts);
     } catch (err) {
       setStoryDetail(null);
-        setConvertImage("");
+      setConvertImage("");
       setAttachments([]);
     }
   };
@@ -170,12 +180,17 @@ export function AutoGenerateView({ externalLogs = [] }) {
       `[IA Agente] Analizando requerimientos y generando robot ${reportCode}...`,
     ]);
     try {
-      const res = await api.post("/autogenerate/generate-robot", {
-        report_code: reportCode,
-        robot_type: robotType,
-        sample_path: samplePath,
-        instructions: instructions,
-      }, { timeout: 180000 });
+      const res = await api.post(
+        "/autogenerate/generate-robot",
+        {
+          report_code: reportCode,
+          robot_type: robotType,
+          sample_path: samplePath,
+          instructions: instructions,
+          report_name: selectedTask?.report_name || selectedTask?.subject || "",
+        },
+        { timeout: 180000 },
+      );
       setGeneratedCode(res.data.robot_code || "");
       setSummary(res.data.summary || []);
       setLocalLogs((prev) => [
@@ -229,6 +244,46 @@ export function AutoGenerateView({ externalLogs = [] }) {
     }
   };
 
+  const handleExportToV2 = async () => {
+    if (!generatedCode) return;
+    setExporting(true);
+    try {
+      const res = await api.post("/autogenerate/export-to-v2", {
+        report_code: reportCode,
+        robot_type: robotType,
+        robot_code: generatedCode,
+        sample_path: samplePath,
+      });
+
+      setExportedInfo(res.data);
+      setLocalLogs((prev) => [
+        ...prev,
+        `[EXPORT V2] ${res.data.message}`,
+      ]);
+
+      setToast({
+        type: "success",
+        title: "Exportado a V2 con Éxito",
+        message: res.data.message,
+        duration: 6000,
+      });
+    } catch (e) {
+      const errMsg = e.response?.data?.detail || e.message;
+      setLocalLogs((prev) => [
+        ...prev,
+        `[EXPORT V2 ERROR] ${errMsg}`,
+      ]);
+      setToast({
+        type: "error",
+        title: "Error al Exportar a V2",
+        message: errMsg,
+        duration: 7000,
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleCopyCode = () => {
     if (generatedCode) {
       navigator.clipboard.writeText(generatedCode);
@@ -250,7 +305,8 @@ export function AutoGenerateView({ externalLogs = [] }) {
             </h1>
           </div>
           <p className="text-xs text-[#636363] mt-1">
-            Integración nativa con Taiga Kanban, descarga automática de muestras y generación cognitiva de robots con cumplimiento estricto DATAX
+            Integración nativa con Taiga Kanban, descarga automática de muestras
+            y generación cognitiva de robots con cumplimiento estricto DATAX
           </p>
         </div>
 
@@ -315,21 +371,26 @@ export function AutoGenerateView({ externalLogs = [] }) {
 
               {/* Filtros de Estado */}
               <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px]">
-                {["all", "New", "In progress", "Revision", "Ready for test", "Done"].map(
-                  (st) => (
-                    <button
-                      key={st}
-                      onClick={() => setStatusFilter(st)}
-                      className={`px-2 py-0.5 rounded-[3px] font-medium whitespace-nowrap transition-colors ${
-                        statusFilter === st
-                          ? "bg-[#024ad8] text-white"
-                          : "bg-slate-100 text-[#636363] hover:bg-slate-200"
-                      }`}
-                    >
-                      {st === "all" ? "Todos" : st}
-                    </button>
-                  )
-                )}
+                {[
+                  "all",
+                  "New",
+                  "In progress",
+                  "Revision",
+                  "Ready for test",
+                  "Done",
+                ].map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setStatusFilter(st)}
+                    className={`px-2 py-0.5 rounded-[3px] font-medium whitespace-nowrap transition-colors ${
+                      statusFilter === st
+                        ? "bg-[#024ad8] text-white"
+                        : "bg-slate-100 text-[#636363] hover:bg-slate-200"
+                    }`}
+                  >
+                    {st === "all" ? "Todos" : st}
+                  </button>
+                ))}
               </div>
 
               {/* Lista Scrollable */}
@@ -407,8 +468,12 @@ export function AutoGenerateView({ externalLogs = [] }) {
                   onChange={(e) => setRobotType(e.target.value)}
                   className="w-full px-3 py-1.5 text-xs border border-[#c2c2c2] rounded-[4px] bg-white outline-none focus:border-[#024ad8]"
                 >
-                  <option value="conversion">Conversión (Excel/PDF → 2 Métodos)</option>
-                  <option value="download">Descarga (Web Scraping / API - 4 Tipos)</option>
+                  <option value="conversion">
+                    Conversión (Excel/PDF → 2 Métodos)
+                  </option>
+                  <option value="download">
+                    Descarga (Web Scraping / API - 4 Tipos)
+                  </option>
                 </select>
               </div>
 
@@ -417,35 +482,58 @@ export function AutoGenerateView({ externalLogs = [] }) {
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-[4px] space-y-2">
                   <div className="text-[11px] font-bold text-[#1a1a1a] flex items-center gap-1.5">
                     <Paperclip className="w-3 h-3 text-[#024ad8]" />
-                    <span>Archivos Adjuntos en Taiga ({attachments.length}):</span>
+                    <span>
+                      Archivos Adjuntos en Taiga ({attachments.length}):
+                    </span>
                   </div>
                   <div className="space-y-1 max-h-28 overflow-y-auto">
                     {attachments.map((att) => {
-                      const isData = /\.(xlsx|xls|pdf|csv)$/i.test(att.name || "");
+                      const isData = /\.(xlsx|xls|pdf|csv)$/i.test(
+                        att.name || "",
+                      );
                       return (
                         <div
                           key={att.id}
                           className={`flex items-center justify-between text-[11px] p-1.5 rounded border transition-all ${
-                            isData ? "bg-emerald-50/50 border-emerald-200" : "bg-white border-[#e8e8e8]"
+                            isData
+                              ? "bg-emerald-50/50 border-emerald-200"
+                              : "bg-white border-[#e8e8e8]"
                           }`}
                         >
-                          <div className="flex items-center gap-1.5 truncate max-w-[200px]" title={att.name}>
-                            <span className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase tracking-wider ${
-                              isData ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"
-                            }`}>
+                          <div
+                            className="flex items-center gap-1.5 truncate max-w-[200px]"
+                            title={att.name}
+                          >
+                            <span
+                              className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase tracking-wider ${
+                                isData
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-slate-200 text-slate-600"
+                              }`}
+                            >
                               {isData ? "Datos" : "Img"}
                             </span>
-                            <span className="truncate text-xs font-mono">{att.name}</span>
+                            <span className="truncate text-xs font-mono">
+                              {att.name}
+                            </span>
                           </div>
                           <button
                             onClick={() => handleDownloadAttachment(att)}
                             disabled={downloadingAtt === att.id}
                             className={`px-2 py-0.5 text-[10px] font-semibold rounded flex items-center gap-1 text-white transition-all ${
-                              isData ? "bg-emerald-600 hover:bg-emerald-700 shadow-xs" : "bg-slate-500 hover:bg-slate-600"
+                              isData
+                                ? "bg-emerald-600 hover:bg-emerald-700 shadow-xs"
+                                : "bg-slate-500 hover:bg-slate-600"
                             }`}
                           >
                             <Download className="w-3 h-3" />
-                            <span>{downloadingAtt === att.id ? "Bajando..." : isData ? "Usar Datos" : "Descargar"}</span>
+                            <span>
+                              {downloadingAtt === att.id
+                                ? "Bajando..."
+                                : isData
+                                  ? "Usar Datos"
+                                  : "Descargar"}
+                            </span>
                           </button>
                         </div>
                       );
@@ -498,7 +586,11 @@ export function AutoGenerateView({ externalLogs = [] }) {
                 className="w-full hp-btn hp-btn-primary text-xs py-2.5 flex items-center justify-center gap-2"
               >
                 <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>{loading ? "Analizando y Generando con IA..." : "Generar Robot Cognitivo"}</span>
+                <span>
+                  {loading
+                    ? "Analizando y Generando con IA..."
+                    : "Generar Robot Cognitivo"}
+                </span>
               </button>
             </div>
           </div>
@@ -529,8 +621,29 @@ export function AutoGenerateView({ externalLogs = [] }) {
                     className="hp-btn hp-btn-secondary text-xs px-3 py-1 flex items-center gap-1.5"
                   >
                     <Play className="w-3.5 h-3.5 text-[#024ad8]" />
-                    <span>{testing ? "Validando..." : "Validar Estándares"}</span>
+                    <span>
+                      {testing ? "Validando..." : "Validar Estándares"}
+                    </span>
                   </button>
+                  <button
+                    onClick={handleExportToV2}
+                    disabled={!generatedCode || exporting}
+                    className="px-3 py-1 text-xs font-semibold rounded-[4px] bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Exportar archivo directamente al proyecto V2 (data-processing-platform-dev-nico)"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{exporting ? "Exportando..." : "Exportar a V2"}</span>
+                  </button>
+                  {exportedInfo && onNavigateTab && (
+                    <button
+                      onClick={() => onNavigateTab(robotType === "conversion" ? "conversion" : "download")}
+                      className="px-3 py-1 text-xs font-semibold rounded-[4px] bg-[#024ad8] hover:bg-blue-700 text-white shadow-xs flex items-center gap-1.5 transition-all"
+                      title={`Ir a la pestaña de ${robotType === "conversion" ? "Conversión" : "Descarga"} para ejecutar las pruebas en V2`}
+                    >
+                      <span>Probar en {robotType === "conversion" ? "Conversión" : "Descarga"}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -570,6 +683,29 @@ export function AutoGenerateView({ externalLogs = [] }) {
                   </ul>
                 </div>
               )}
+
+              {exportedInfo && (
+                <div className="p-3 bg-emerald-50/90 border border-emerald-300 rounded-[4px] flex flex-wrap items-center justify-between gap-3 text-xs text-emerald-950">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <span className="font-bold">Robot exportado en V2:</span>{" "}
+                      <code className="font-mono text-[11px] bg-emerald-100/80 px-1.5 py-0.5 rounded border border-emerald-200">
+                        {exportedInfo.path}
+                      </code>
+                    </div>
+                  </div>
+                  {onNavigateTab && (
+                    <button
+                      onClick={() => onNavigateTab(robotType === "conversion" ? "conversion" : "download")}
+                      className="px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1 shrink-0 transition-all shadow-xs"
+                    >
+                      <span>Abrir pestaña {robotType === "conversion" ? "Conversión" : "Descarga"}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <TerminalLogs
@@ -583,9 +719,21 @@ export function AutoGenerateView({ externalLogs = [] }) {
         <div className="hp-card p-6 space-y-6">
           <div className="flex items-center gap-3 border-b border-[#e8e8e8] pb-3 text-xs">
             {[
-              { id: "conversion", label: "Guía Conversión (2 Métodos)", icon: BookOpen },
-              { id: "download", label: "Guía Descarga (4 Tipos)", icon: Download },
-              { id: "checklist", label: "Checklist de Calidad", icon: CheckSquare },
+              {
+                id: "conversion",
+                label: "Guía Conversión (2 Métodos)",
+                icon: BookOpen,
+              },
+              {
+                id: "download",
+                label: "Guía Descarga (4 Tipos)",
+                icon: Download,
+              },
+              {
+                id: "checklist",
+                label: "Checklist de Calidad",
+                icon: CheckSquare,
+              },
               { id: "templates", label: "Plantillas Canónicas", icon: Code2 },
             ].map((g) => {
               const IconComp = g.icon;
@@ -658,20 +806,27 @@ export function AutoGenerateView({ externalLogs = [] }) {
                     <code>compare_files()</code>.
                   </li>
                   <li>
-                    <strong>Tipo II (Descarga Controlada + Comparación):</strong>{" "}
+                    <strong>
+                      Tipo II (Descarga Controlada + Comparación):
+                    </strong>{" "}
                     Implementa <code>verify_download()</code> y{" "}
                     <code>compare_files()</code>.
                   </li>
                   <li>
-                    <strong>Tipo III (Pipeline Integrado / APIs / REST):</strong>{" "}
+                    <strong>
+                      Tipo III (Pipeline Integrado / APIs / REST):
+                    </strong>{" "}
                     Implementa <code>check_new_data()</code>. Recrea{" "}
                     <code>tmp/</code> y retorna lista de diccionarios con llaves
-                    exactas <code>{"{'tmp_path', 'updated_to', 'download_url'}"}</code>.
+                    exactas{" "}
+                    <code>{"{'tmp_path', 'updated_to', 'download_url'}"}</code>.
                   </li>
                   <li>
-                    <strong>Tipo IV (Descarga por Lote con Prefijo de Fecha):</strong>{" "}
-                    Implementa <code>get_data()</code> con archivos nombrados con
-                    formato ISO <code>YYYY-MM-DD_...</code>.
+                    <strong>
+                      Tipo IV (Descarga por Lote con Prefijo de Fecha):
+                    </strong>{" "}
+                    Implementa <code>get_data()</code> con archivos nombrados
+                    con formato ISO <code>YYYY-MM-DD_...</code>.
                   </li>
                 </ul>
               </div>
@@ -706,7 +861,7 @@ export function AutoGenerateView({ externalLogs = [] }) {
                   Estructura Canónica: Robot de Conversión
                 </h4>
                 <pre className="p-3 bg-[#111] text-emerald-400 font-mono text-[11px] rounded-[4px] overflow-x-auto">
-{`import os
+                  {`import os
 import pandas as pd
 from conversion_tools import to_numeric_datax
 
@@ -732,6 +887,9 @@ Robot = D_BO_000000051_01`}
           </div>
         </div>
       )}
+
+      {/* Modern Toast Notification */}
+      <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );
 }

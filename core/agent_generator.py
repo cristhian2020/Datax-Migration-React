@@ -54,6 +54,20 @@ def inspect_sample_file(file_path: str, page_number: int = 1, target_sheet: str 
     return chr(10).join(summary)
 
 
+def load_datax_skill(skill_name: str, workspace_dir: str = "") -> str:
+    """Carga las instrucciones completas de una skill desde .agents/skills/<skill_name>/SKILL.md."""
+    if not workspace_dir:
+        workspace_dir = os.path.dirname(os.path.dirname(__file__))
+    path = os.path.join(workspace_dir, ".agents", "skills", skill_name, "SKILL.md")
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            pass
+    return ""
+
+
 def load_datax_rules(workspace_dir: str = "") -> str:
     """Carga el texto de las reglas oficiales de .agents/rules/datax_standards.md."""
     if not workspace_dir:
@@ -175,7 +189,9 @@ class AgentGenerator:
         key_words: str = "",
         sample_inspection: str = "",
         target_sheet: str = "",
-        rules_text: str = ""
+        rules_text: str = "",
+        extra_instructions: str = "",
+        workspace_dir: str = ""
     ) -> Tuple[bool, str]:
         """Genera el código de un robot de conversión cumpliendo la Regla Estricta de 2 Métodos y estándares oficiales."""
         system_prompt = (
@@ -197,9 +213,14 @@ class AgentGenerator:
             "5. extraction() retorna (metadata_dict, df_melted) donde:\n"
             "   - metadata_dict DEBE contener única y exactamente estas 3 llaves obligatorias:\n"
             "       'file_name': os.path.basename(file_path),\n"
-            "       'titles': [sheet_title],  # DEBE SER UNA LISTA DE STRINGS (ej: ['Titulo 1', 'Titulo 2'])\n"
+            "       'titles': [nombre_reporte],  # NUNCA usar el código del robot (ej: D_BO_...). Usar el nombre descriptivo real del reporte o títulos extraídos del archivo.\n"
             "       'page_number': int(page_number)\n"
             "   - df_melted contiene las columnas limpias des-pivotadas: [nv1, nv2, ..., fecha, valor].\n"
+            "   - REGLA DINÁMICA DE JERARQUÍAS (nv1 a nvN segun .agents): La cantidad de niveles es flexible y adaptativa según la estructura del reporte:\n"
+            "       * Si las instrucciones incluyen un 'EJEMPLO OFICIAL DE NIVELES (Convert Image)' de Taiga, el DataFrame (df_melted) DEBE reproducir fielmente la cantidad y mapeo de niveles definidos en ese modelo particular (si el modelo pide nv1..nv3, nv1..nv4, nv1..nv5 o nv1..nv6, respetar exactamente esa estructura).\n"
+            "       * Si no hay Convert Image, deducir los niveles según la regla de colores de DATAX (.agents/rules/datax_standards.md): nv1=Raíz/Total, nv2=Sector/Agrupador, nv3=Subsector/Entidad, nv4=Instrumento/Detalle, nv5=Sub-instrumento o primer agrupador horizontal, nv6=Moneda o segundo agrupador horizontal.\n"
+            "   - FILTRADO ESTRICTO DE FILAS BASURA: Descartar filas con 'Unnamed:', nombres de columnas o encabezados técnicos (ej: 'Departamento/ Ciudad', 'Entidad'). NUNCA permitir que 'Unnamed: 0' aparezca en los datos extraídos.\n"
+            "   - AGREGACIÓN / CONTEO: Si el archivo es un registro detallado de puntos/sucursales y el ejemplo de Taiga muestra 'valor' numérico como conteo, aplicar agrupación: df.groupby(['nv1', 'nv2', 'nv3', 'nv4', 'fecha']).size().reset_index(name='valor').\n"
             "   - NO llamar a insert_metadata() dentro de extraction() porque el orquestador y test_conversion.py lo invocan sobre el resultado.\n"
             "6. validate_data_results() retorna False cuando los datos son válidos y consistentes, y True si hay error.\n"
             f"7. Al final del archivo incluir alias: Robot = {robot_code}.\n"
@@ -211,6 +232,7 @@ class AgentGenerator:
         example_subfolder = "conversion_pdf" if is_pdf else "conversion_excel"
         example_code = load_example(example_subfolder)
         conversion_guide = load_doc("GUIA_ROBOTS_CONVERSION.md")
+        skill_content = load_datax_skill("crear-robot-conversion", workspace_dir)
 
         user_prompt = f"""
 Genera el código completo de robot.py para el siguiente reporte de Conversión:
@@ -240,16 +262,19 @@ INSTRUCCIONES CLAVE DE ARQUITECTURA Y PRUEBAS (test_conversion.py):
 5. Devuelve False en validate_data_results si los datos son válidos y consistentes (test_conversion.py fallará si retorna True).
 6. NO llames a insert_metadata() dentro de extraction(). Deja el DataFrame con [nv1, fecha, valor] y retorna metadata_dict, df_melted.
 
+ESPECIFICACIONES ADICIONALES Y MODELO OFICIAL DE NIVELES DE TAIGA (MÁXIMA PRIORIDAD):
+{extra_instructions or 'No se especificaron instrucciones adicionales.'}
+
 EJEMPLO OFICIAL DE REFERENCIA ({example_subfolder}):
 ```python
 {example_code[:2500] if example_code else '# Usar arquitectura oficial de 2 métodos'}
 ```
 
-GUÍA OFICIAL DE CONVERSIÓN:
-{conversion_guide[:1500] if conversion_guide else ''}
+SKILL OFICIAL Y ESTÁNDARES DATAX (.agents):
+{skill_content[:4000] if skill_content else rules_text[:3000]}
 
-Información adicional de reglas y estándares:
-{rules_text[:2000] if rules_text else 'Cumplir estrictamente con PEP 8 y estándares oficiales de DATAX.'}
+GUÍA DE CONVERSIÓN:
+{conversion_guide[:1200] if conversion_guide else ''}
 """
         ok, res = self._call_gemini(user_prompt, system_instruction=system_prompt)
         if ok:
@@ -299,6 +324,7 @@ Información adicional de reglas y estándares:
         example_code = load_example(example_subfolder)
         playwright_example = load_example("download_playwright")
         download_guide = load_doc("GUIA_ROBOTS_DESCARGA.md")
+        skill_download = load_datax_skill("crear-robot-descarga", workspace_dir)
 
         user_prompt = f"""
 Genera el código completo de robot.py para el siguiente robot de Descarga:
@@ -383,7 +409,8 @@ Analiza la causa raíz del error (ej. índice fuera de rango, tipos de datos, je
         robot_type: str = "conversion",
         sample_path: str = "",
         extra_instructions: str = "",
-        workspace_dir: str = ""
+        workspace_dir: str = "",
+        report_name: str = ""
     ) -> Tuple[str, List[str]]:
         """
         Orquesta la generación completa del robot con IA.
@@ -400,12 +427,15 @@ Analiza la causa raíz del error (ej. índice fuera de rango, tipos de datos, je
         decimal_separator = ","
         key_words = ""
         target_sheet = ""
+        parsed_rep_name = report_name
 
         if extra_instructions:
             for line in extra_instructions.splitlines():
                 l_str = line.strip()
                 l_low = l_str.lower()
-                if l_low.startswith("url:"):
+                if l_low.startswith("reporte:") or l_low.startswith("nombre:"):
+                    parsed_rep_name = l_str.split(":", 1)[1].strip()
+                elif l_low.startswith("url:"):
                     main_url = l_str.split(":", 1)[1].strip()
                 elif "página:" in l_low or "pagina:" in l_low:
                     try:
@@ -442,13 +472,15 @@ Analiza la causa raíz del error (ej. índice fuera de rango, tipos de datos, je
             summary.append("📜 Aplicando Regla Estricta de 2 Métodos (extraction, validate_data_results)")
             ok, res_code = self.generate_conversion_robot(
                 robot_code=report_code,
-                report_name=report_code,
+                report_name=parsed_rep_name or report_code,
                 page_number=page_number,
                 decimal_separator=decimal_separator,
                 key_words=key_words,
                 sample_inspection=inspection_text,
                 target_sheet=target_sheet,
-                rules_text=rules_text
+                rules_text=rules_text,
+                extra_instructions=extra_instructions,
+                workspace_dir=workspace_dir
             )
             if not ok:
                 raise RuntimeError(f"Falla en generación con IA: {res_code}")

@@ -10,7 +10,7 @@ if PROJECT_ROOT not in sys.path:
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from server.utils.logger_stream import log_manager
-from server.routers import config, download, conversion, migration, autogenerate, metrics
+from server.routers import config, download, conversion, migration, autogenerate, metrics, routes_test
 
 app = FastAPI(
     title="DataX Migration Studio API",
@@ -33,6 +33,7 @@ app.include_router(conversion.router)
 app.include_router(migration.router)
 app.include_router(autogenerate.router)
 app.include_router(metrics.router)
+app.include_router(routes_test.router)
 
 @app.websocket("/ws/logs")
 async def websocket_logs(websocket: WebSocket):

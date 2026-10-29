@@ -55,7 +55,9 @@ export function App() {
         {activeTab === "download" && <DownloadView externalLogs={logs} />}
         {activeTab === "conversion" && <ConversionView externalLogs={logs} />}
         {activeTab === "migration" && <MigrationView externalLogs={logs} />}
-        {activeTab === "autogenerate" && <AutoGenerateView externalLogs={logs} />}
+        {activeTab === "autogenerate" && (
+          <AutoGenerateView externalLogs={logs} onNavigateTab={setActiveTab} />
+        )}
         {activeTab === "metrics" && <MetricsView />}
       </main>
 

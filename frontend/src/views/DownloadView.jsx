@@ -736,12 +736,32 @@ export function DownloadView({ externalLogs = [] }) {
 
               <div className="hp-card p-4">
                 <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#e8e8e8]">
-                  <span className="text-xs font-bold uppercase text-[#024ad8]">
-                    {detail?.already_migrated
-                      ? "Código Estandarizado (V2 Guardado)"
-                      : "Código Refactorizado Sugerido (V2)"}
-                  </span>
-                  <Badge variant="primary">V2 Estandarizado</Badge>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase text-[#024ad8]">
+                      {detail?.already_migrated
+                        ? "Código Estandarizado (V2 Guardado)"
+                        : "Código Refactorizado Sugerido (V2)"}
+                    </span>
+                    <Badge variant="primary">V2 Estandarizado</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleCopyCode}
+                      className="px-2.5 py-1 text-xs border border-[#c2c2c2] rounded-[4px] hover:bg-slate-50 flex items-center gap-1.5 text-[#1a1a1a]"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Copiar</span>
+                    </button>
+                    <button
+                      onClick={handleSaveCode}
+                      disabled={savingCode}
+                      className="hp-btn hp-btn-primary text-xs px-3 py-1 flex items-center gap-1.5"
+                      title="Guardar este código directamente en models/download/<codigo>/<codigo>.py en V2"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{savingCode ? "Guardando..." : "Guardar en Repo V2"}</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="h-[480px] rounded-[4px] overflow-hidden border border-[#024ad8]/20">
                   <Editor

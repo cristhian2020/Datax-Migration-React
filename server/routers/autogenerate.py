@@ -1,4 +1,5 @@
 import os
+import shutil
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -30,6 +31,14 @@ class GenerateRobotRequest(BaseModel):
     robot_type: str  # conversion / download
     sample_path: str
     instructions: Optional[str] = ""
+    report_name: Optional[str] = ""
+
+class ExportToV2Request(BaseModel):
+    report_code: str
+    robot_type: str  # conversion / download
+    robot_code: str
+    parent_code: Optional[str] = None
+    sample_path: Optional[str] = None
 
 class TestRobotRequest(BaseModel):
     report_code: str
@@ -181,7 +190,8 @@ async def generate_robot(req: GenerateRobotRequest):
             report_code=req.report_code,
             robot_type=req.robot_type,
             sample_path=sample,
-            extra_instructions=req.instructions
+            extra_instructions=req.instructions,
+            report_name=req.report_name or ""
         )
         
         await log_manager.broadcast("¡Código generado con éxito!", "info", "autogenerate")
@@ -210,6 +220,91 @@ async def test_robot(req: TestRobotRequest):
         await log_manager.broadcast(l, lvl, "autogenerate")
         
     return res
+
+@router.post("/export-to-v2")
+async def export_to_v2(req: ExportToV2Request):
+    cfg = get_current_config()
+    new_repo = cfg.get("new_repo") or ""
+    if not new_repo or not os.path.isdir(new_repo):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Directorio de repositorio V2 no configurado o no existe: '{new_repo}'. Configúralo en Configuración / .env (NEW_REPO_PATH)."
+        )
+
+    saved_files = []
+
+    if req.robot_type == "conversion":
+        parent_code = req.parent_code
+        if not parent_code:
+            parts = req.report_code.split("_")
+            if len(parts) >= 4 and parts[0] == "D":
+                parent_code = f"C_{parts[1]}_{parts[2]}"
+            elif req.report_code.startswith("D_"):
+                parent_code = req.report_code.replace("D_", "C_")
+            else:
+                parent_code = req.report_code
+
+        target_dir = os.path.join(new_repo, "models", "conversion", parent_code)
+        os.makedirs(target_dir, exist_ok=True)
+        target_py = os.path.join(target_dir, f"{req.report_code}.py")
+
+        with open(target_py, "w", encoding="utf-8") as f:
+            f.write(req.robot_code)
+        saved_files.append(target_py)
+
+        # Copiar muestra si existe
+        sample_path = req.sample_path
+        if sample_path:
+            if not os.path.isfile(sample_path):
+                candidates = [
+                    os.path.join(".", sample_path),
+                    os.path.join(".", "attachtments", os.path.basename(sample_path)),
+                    os.path.join(new_repo, "attachtments", os.path.basename(sample_path)),
+                ]
+                for c in candidates:
+                    if os.path.isfile(c):
+                        sample_path = c
+                        break
+
+            if sample_path and os.path.isfile(sample_path):
+                sample_dest = os.path.join(target_dir, os.path.basename(sample_path))
+                try:
+                    shutil.copy2(sample_path, sample_dest)
+                    saved_files.append(sample_dest)
+                except Exception as e:
+                    print(f"Warning: No se pudo copiar muestra: {e}")
+
+        msg = f"Robot de conversión exportado a V2: models/conversion/{parent_code}/{req.report_code}.py"
+        await log_manager.broadcast(f"[EXPORT V2] {msg}", "info", "autogenerate")
+        return {
+            "success": True,
+            "message": msg,
+            "path": target_py,
+            "parent_code": parent_code,
+            "target_dir": target_dir,
+            "saved_files": saved_files,
+            "robot_type": "conversion"
+        }
+    else:
+        # Descarga
+        target_dir = os.path.join(new_repo, "models", "download", req.report_code)
+        os.makedirs(target_dir, exist_ok=True)
+        target_py = os.path.join(target_dir, f"{req.report_code}.py")
+
+        with open(target_py, "w", encoding="utf-8") as f:
+            f.write(req.robot_code)
+        saved_files.append(target_py)
+
+        msg = f"Robot de descarga exportado a V2: models/download/{req.report_code}/{req.report_code}.py"
+        await log_manager.broadcast(f"[EXPORT V2] {msg}", "info", "autogenerate")
+        return {
+            "success": True,
+            "message": msg,
+            "path": target_py,
+            "target_dir": target_dir,
+            "saved_files": saved_files,
+            "robot_type": "download"
+        }
 
 @router.get("/docs")
 def get_docs():
